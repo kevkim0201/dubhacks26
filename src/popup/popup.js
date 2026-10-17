@@ -2,6 +2,8 @@ import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG } from '../lib/character.js';
 import { searchCoupons, rankCoupons, humanizeStoreName } from '../lib/coupons.js';
 import { renderPurchaseHistory } from './purchase-history.js';
+import { mountDealSavingsView } from '../../savings-storage/deal-savings-view.js';
+import { seedMockDealIfDemo } from '../../savings-storage/mock-deal.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -25,6 +27,7 @@ const els = {
   progressNote: $('progress-note'),
   dueSection: $('due-soon-section'),
   dueList: $('due-list'),
+  dealSavings: $('deal-savings'),
   openCoupons: $('open-coupons'),
   toggleManual: $('toggle-manual'),
   form: $('manual-form'),
@@ -89,6 +92,10 @@ async function init() {
   els.openCoupons.addEventListener('click', onOpenCoupons);
   els.couponsBack.addEventListener('click', () => showView('main'));
   els.applyBtn.addEventListener('click', onApplyCoupon);
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  await seedMockDealIfDemo(tab?.url).catch(() => {});
+  mountDealSavingsView(els.dealSavings, { tabUrl: tab?.url });
 }
 
 function showView(view) {
