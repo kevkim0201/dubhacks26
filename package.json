@@ -1,0 +1,12 @@
+{
+  "name": "dubhacks26",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension (Manifest V3) built at DubHacks 2026.",
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "check": "node scripts/check.mjs",
+    "zip": "npm run check && mkdir -p dist && zip -r dist/dubhacks26.zip manifest.json icons src -x '*.DS_Store'"
+  }
+}

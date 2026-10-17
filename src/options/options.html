@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>DubHacks 26 &mdash; Settings</title>
+    <link rel="stylesheet" href="../popup/popup.css" />
+    <style>
+      body { width: 420px; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+      .row:last-of-type { border-bottom: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Settings</h1>
+
+    <div class="row">
+      <label for="enabled">Enable on all pages</label>
+      <input type="checkbox" id="enabled" />
+    </div>
+
+    <div class="row">
+      <label for="highlightColor">Accent color</label>
+      <input type="color" id="highlightColor" />
+    </div>
+
+    <p class="status" id="status" role="status"></p>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

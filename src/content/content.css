@@ -1,0 +1,48 @@
+/* Injected into every matched page -- every selector is namespaced so it can't
+   collide with the host page's own styles. */
+#dubhacks26-panel {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: 280px;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #18181b;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+  overflow: hidden;
+}
+
+#dubhacks26-panel .dh-panel__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  background: var(--dh-accent, #6366f1);
+  color: #fff;
+}
+
+#dubhacks26-panel .dh-panel__title {
+  font-weight: 600;
+}
+
+#dubhacks26-panel .dh-panel__close {
+  all: unset;
+  cursor: pointer;
+  padding: 0 6px;
+  font-size: 18px;
+  line-height: 1;
+  color: #fff;
+}
+
+#dubhacks26-panel .dh-panel__body {
+  padding: 12px;
+}
+
+#dubhacks26-panel .dh-panel__url {
+  margin: 0;
+  word-break: break-word;
+}
