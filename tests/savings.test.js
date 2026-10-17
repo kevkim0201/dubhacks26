@@ -99,6 +99,7 @@ test("summary and canonical stats agree in dollars and include returned purchase
 test("dollar arithmetic rounds through cents and formatting accepts dollars", () => {
   const floatSummary = getSavingsSummary([edgeCases.floatA, edgeCases.floatB]);
   assert.equal(calculateSavings(100, 79.9), 20.1);
+  assert.equal(calculateSavings(0.3, 0.1), 0.2);
   assert.equal(calculateSavings(10, 12), 0);
   assert.throws(() => calculateSavings(-1, 0), TypeError);
   assert.equal(floatSummary.totalSaved, 0.3);

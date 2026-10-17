@@ -200,6 +200,51 @@ body {
   color: var(--muted);
 }
 
+/* --- purchase history --- */
+.purchase-history-wrap { margin-top: 14px; }
+.purchase-history-section { padding-top: 10px; border-top: 1px solid var(--line); }
+.history-heading {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.history-empty-text { margin: 0; color: var(--muted); font-size: 12px; }
+.purchase-list { list-style: none; margin: 0; padding: 0; }
+.purchase-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.purchase-item:last-child { border-bottom: 0; }
+.purchase-info { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.purchase-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+.purchase-meta { color: var(--muted); font-size: 10px; }
+.purchase-stats { display: flex; flex-direction: column; text-align: right; font-size: 10px; }
+.purchase-savings { color: var(--accent); font-weight: 700; }
+.btn-delete-purchase { flex: 0 0 auto; padding: 4px 7px; font-size: 10px; }
+.undo-toast {
+  position: fixed;
+  z-index: 10;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--bg);
+  background: var(--fg);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px #0003;
+}
+.undo-btn { padding: 4px 8px; color: var(--fg); background: var(--bg); }
+
 /* --- due soon --- */
 .section-title {
   margin: 0 0 6px;

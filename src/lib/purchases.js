@@ -1,9 +1,12 @@
+// src/lib/purchases.js
+import { isValidPurchase, calculateSavings } from './savings.js';
+
 // Two lists live in chrome.storage.local (not .sync -- a growing purchase
 // history can exceed sync's per-item quota, and it doesn't need to roam
 // between machines):
 //
 //   purchases         confirmed purchases -- these count toward XP/stats
-//   pendingPurchases   auto-detected candidates awaiting a one-tap confirm
+//   pendingPurchases  auto-detected candidates awaiting a one-tap confirm
 //
 // A third list, ignoredOrderUrls, remembers pages the user dismissed so a
 // re-visit (or the content script's periodic re-check) doesn't nag again.
@@ -47,26 +50,62 @@ async function getIgnoredUrls() {
   return ignored;
 }
 
-// `data`: { title, store?, url?, pricePaid, savings?, purchaseDate?, returnDeadline? }
+// `data`: { id?, title, store?, url?, pricePaid, originalPrice?, savings?, purchaseDate?, returnDeadline? }
 export async function addPurchase(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Invalid purchase payload: expected an object');
+  }
+
   const purchases = await getPurchases();
+  const id = data.id ? String(data.id).trim() : crypto.randomUUID();
+
+  // Guard against duplicate IDs
+  if (purchases.some((p) => p.id === id)) {
+    throw new Error(`Duplicate purchase ID: ${id}`);
+  }
+
+  // Validate price paid
+  const pricePaidNum = Number(data.pricePaid);
+  if (!Number.isFinite(pricePaidNum) || pricePaidNum < 0) {
+    throw new Error('pricePaid must be a non-negative number');
+  }
+  const pricePaid = Math.round(pricePaidNum * 100) / 100;
+
+  // Determine savings using integer-cent math via calculateSavings()
+  let savings = 0;
+  if (data.originalPrice !== undefined) {
+    savings = calculateSavings(Number(data.originalPrice), pricePaid);
+  } else if (data.savings !== undefined) {
+    const rawSavings = Number(data.savings);
+    if (!Number.isFinite(rawSavings) || rawSavings < 0) {
+      throw new Error('savings must be a non-negative number');
+    }
+    savings = Math.round(rawSavings * 100) / 100;
+  }
+
   const now = new Date().toISOString();
   const purchase = {
-    id: crypto.randomUUID(),
-    title: data.title.trim(),
+    id,
+    title: String(data.title || '').trim(),
     store: data.store?.trim() || '',
     url: data.url || '',
-    pricePaid: Number(data.pricePaid) || 0,
-    savings: Number(data.savings) || 0,
+    pricePaid,
+    savings,
     purchaseDate: data.purchaseDate || now,
     returnDeadline: data.returnDeadline || null,
-    returned: false,
-    returnedDate: null,
-    notifiedSoon: false,
-    notifiedUrgent: false,
+    returned: Boolean(data.returned),
+    returnedDate: data.returnedDate || null,
+    notifiedSoon: Boolean(data.notifiedSoon),
+    notifiedUrgent: Boolean(data.notifiedUrgent),
     source: data.source || 'manual',
-    createdAt: now,
+    createdAt: data.createdAt || now,
   };
+
+  // Schema verification against Phase 1 rules
+  if (!isValidPurchase(purchase)) {
+    throw new Error('Purchase record failed schema validation');
+  }
+
   purchases.unshift(purchase);
   await savePurchases(purchases);
   return purchase;
@@ -80,8 +119,12 @@ export async function updatePurchase(id, patch) {
 }
 
 export async function deletePurchase(id) {
+  if (!id) throw new Error('Purchase ID is required');
   const purchases = await getPurchases();
-  await savePurchases(purchases.filter((p) => p.id !== id));
+  const index = purchases.findIndex((p) => p.id === id);
+  const deleted = index === -1 ? null : purchases.splice(index, 1)[0];
+  await savePurchases(purchases);
+  return { deleted, remaining: purchases };
 }
 
 export async function markReturned(id, returned = true) {

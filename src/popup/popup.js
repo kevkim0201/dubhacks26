@@ -1,6 +1,7 @@
 import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG } from '../lib/character.js';
 import { searchCoupons, rankCoupons, humanizeStoreName } from '../lib/coupons.js';
+import { renderPurchaseHistory } from './purchase-history.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -11,6 +12,7 @@ const els = {
   openDashboard: $('open-dashboard'),
   pendingSection: $('pending-section'),
   pendingList: $('pending-list'),
+  historySection: $('purchase-history-section'),
   statSaved: $('stat-saved'),
   statMonth: $('stat-month'),
   tierPill: $('tier-pill'),
@@ -61,6 +63,10 @@ let currentState = null;
 // Scratch state for the coupons view -- rebuilt each time it's opened.
 let couponsCtx = { tabId: null, store: null, cartTotal: null, shipping: null, ranked: [], selectedId: null };
 
+// Undo banner state for purchase deletion
+let lastDeletedPurchase = null;
+let undoBannerTimer = null;
+
 init();
 
 async function init() {
@@ -92,9 +98,10 @@ function showView(view) {
 
 function render(state) {
   currentState = state;
-  const { settings, character, stats, pending } = state;
+  const { settings, character, stats, pending, purchases } = state;
 
   renderPending(pending);
+  renderHistory(purchases || []);
 
   els.statSaved.textContent = formatMoney(stats.totalSaved);
   els.statMonth.textContent = `+${formatMoney(stats.savedThisMonth)}`;
@@ -543,4 +550,68 @@ function setCouponsStatus(text) {
   els.couponsStatus.textContent = text;
   clearTimeout(couponsStatusTimer);
   couponsStatusTimer = setTimeout(() => { els.couponsStatus.textContent = ''; }, 3000);
+}
+
+// ======================== Purchase History & Undo ========================
+
+function renderHistory(purchases) {
+  if (!els.historySection) return;
+  renderPurchaseHistory(els.historySection, {
+    purchases,
+    onDelete: (id, item) => handleDeletePurchase(id, item),
+  });
+}
+
+async function handleDeletePurchase(id, item) {
+  const state = await sendToBackground(MSG.DELETE_PURCHASE, { id });
+  if (state?.ok && state.deleted) {
+    lastDeletedPurchase = state.deleted;
+    showUndoToast(state.deleted);
+    render(state);
+    setStatus(`Removed "${item.title}".`);
+  } else if (state?.ok) {
+    setStatus("That purchase was already removed.");
+  } else {
+    setStatus(state?.error || "Couldn't delete purchase.");
+  }
+}
+
+function showUndoToast(item) {
+  const existing = document.getElementById('undo-toast');
+  if (existing) existing.remove();
+  clearTimeout(undoBannerTimer);
+
+  const toast = document.createElement('div');
+  toast.id = 'undo-toast';
+  toast.className = 'undo-toast';
+
+  const label = document.createElement('span');
+  label.textContent = `Removed "${item.title}". `;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'undo-btn';
+  btn.textContent = 'Undo';
+  btn.onclick = async () => {
+    if (!lastDeletedPurchase) return;
+    const restored = await sendToBackground(MSG.ADD_PURCHASE, lastDeletedPurchase);
+    if (restored?.ok) {
+      clearTimeout(undoBannerTimer);
+      undoBannerTimer = null;
+      toast.remove();
+      lastDeletedPurchase = null;
+      render(restored);
+      setStatus(`Restored "${item.title}".`);
+    } else {
+      setStatus(restored?.error || "Couldn't restore purchase.");
+    }
+  };
+
+  toast.append(label, btn);
+  document.body.appendChild(toast);
+
+  undoBannerTimer = setTimeout(() => {
+    toast.remove();
+    lastDeletedPurchase = null;
+  }, 5000);
 }

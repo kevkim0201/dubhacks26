@@ -51,7 +51,7 @@ async function handleMessage({ type, payload }) {
       return { ok: true, ...(await buildState()) };
 
     case MSG.ADD_PURCHASE:
-      await addPurchase({ ...payload, source: 'manual' });
+      await addPurchase(payload);
       await updateBadge();
       return { ok: true, ...(await buildState()) };
 
@@ -60,10 +60,14 @@ async function handleMessage({ type, payload }) {
       await updateBadge();
       return { ok: true, ...(await buildState()) };
 
-    case MSG.DELETE_PURCHASE:
-      await deletePurchase(payload.id);
+    case MSG.DELETE_PURCHASE: {
+      const { deleted } = await deletePurchase(payload.id);
       await updateBadge();
-      return { ok: true, ...(await buildState()) };
+      return { ok: true, ...(await buildState()), deleted };
+    }
+
+    case MSG.GET_PURCHASES:
+      return { ok: true, purchases: await getPurchases() };
 
     case MSG.MARK_RETURNED:
       await markReturned(payload.id, payload.returned ?? true);

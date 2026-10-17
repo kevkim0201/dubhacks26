@@ -9,7 +9,11 @@ export function calculateSavings(originalTotal, paidTotal) {
   if (!isNonNegativeAmount(originalTotal) || !isNonNegativeAmount(paidTotal)) {
     throw new TypeError("Prices must be non-negative dollar amounts");
   }
-  return Math.round(Math.max(0, originalTotal - paidTotal) * 100) / 100;
+  const savingsCents = Math.max(
+    0,
+    Math.round(originalTotal * 100) - Math.round(paidTotal * 100),
+  );
+  return savingsCents / 100;
 }
 
 function reject(purchase, reason) {
