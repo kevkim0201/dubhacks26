@@ -1,4 +1,4 @@
-/* savings-view.css — every selector is scoped under .savings-dashboard */
+/* Savings dashboard styles, scoped under .savings-dashboard. */
 .savings-dashboard {
   --sv-ink: #14302a;
   --sv-muted: #5b7068;

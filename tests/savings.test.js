@@ -1,25 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { edgeCases, mockPurchases } from "./mock-test.js";
+import { edgeCases, mockPurchases } from "./mock-purchases.js";
 import {
   clearCurrentDealSavings,
   getCurrentDealSavings,
   onCurrentDealSavingsChanged,
   saveCurrentDealSavings,
-} from "./savings-storage.js";
+} from "../savings-storage/savings-storage.js";
 import {
+  calculateSavings,
   formatCurrency,
   getConfirmedPurchases,
   isValidPurchase,
-} from "./savings.js";
+} from "../src/lib/savings.js";
 import {
   getAverageSavings,
   getPurchaseCount,
   getRecentSavings,
   getSavingsSummary,
   getTotalSavings,
-} from "./savings-summary.js";
+} from "../src/lib/savings-summary.js";
 
 function installChromeStorageMock() {
   const values = {};
@@ -58,14 +59,13 @@ function installChromeStorageMock() {
   };
 }
 
-test("only valid, confirmed purchases count and the first duplicate wins", () => {
+test("validates the canonical purchase shape without requiring a status field", () => {
   const purchases = [
     ...mockPurchases,
-    edgeCases.duplicate,
     edgeCases.negativePrice,
-    edgeCases.wrongSavings,
-    edgeCases.pending,
-    edgeCases.eur,
+    edgeCases.negativeSavings,
+    edgeCases.missingTitle,
+    edgeCases.badDate,
   ];
   const original = [...purchases];
 
@@ -73,43 +73,49 @@ test("only valid, confirmed purchases count and the first duplicate wins", () =>
 
   assert.deepEqual(confirmed, mockPurchases);
   assert.deepEqual(purchases, original);
-  assert.equal(isValidPurchase(edgeCases.zeroSavings), true);
-  assert.equal(isValidPurchase(edgeCases.paidMoreThanOriginal), true);
+  assert.equal(isValidPurchase(mockPurchases[0]), true);
   assert.equal(isValidPurchase(null), false);
   assert.deepEqual(getConfirmedPurchases(null), []);
 });
 
-test("savings summary uses confirmed purchases and integer cents", () => {
-  const summary = getSavingsSummary([
-    ...mockPurchases,
-    edgeCases.pending,
-    edgeCases.negativePrice,
-  ]);
+test("summary and canonical stats agree in dollars and include returned purchases", () => {
+  const purchases = [...mockPurchases, edgeCases.returned];
+  const summary = getSavingsSummary(purchases);
 
   assert.deepEqual(summary, {
-    totalSavedCents: 6000,
-    purchaseCount: 3,
-    averageSavedCents: 2000,
-    mostRecentSavedCents: 1500,
-    recentPurchases: [mockPurchases[2], mockPurchases[1], mockPurchases[0]],
+    totalSaved: 60.1,
+    purchaseCount: 4,
+    averageSaved: 15.03,
+    mostRecentSaved: 15,
+    recentPurchases: [mockPurchases[2], mockPurchases[1], mockPurchases[0], edgeCases.returned],
   });
-  assert.equal(getTotalSavings(mockPurchases), 6000);
-  assert.equal(getPurchaseCount(mockPurchases), 3);
-  assert.equal(getAverageSavings(mockPurchases), 2000);
-  assert.deepEqual(getRecentSavings(mockPurchases, 2), [mockPurchases[2], mockPurchases[1]]);
+  assert.equal(getTotalSavings(purchases), 60.1);
+  assert.equal(getPurchaseCount(purchases), 4);
+  assert.equal(getAverageSavings(purchases), 15.03);
+  assert.deepEqual(getRecentSavings(purchases, 2), [mockPurchases[2], mockPurchases[1]]);
   assert.deepEqual(getRecentSavings(mockPurchases, 0), []);
 });
 
-test("empty summary and currency formatting have stable defaults", () => {
+test("dollar arithmetic rounds through cents and formatting accepts dollars", () => {
+  const floatSummary = getSavingsSummary([edgeCases.floatA, edgeCases.floatB]);
+  assert.equal(calculateSavings(100, 79.9), 20.1);
+  assert.equal(calculateSavings(10, 12), 0);
+  assert.throws(() => calculateSavings(-1, 0), TypeError);
+  assert.equal(floatSummary.totalSaved, 0.3);
+  assert.equal(formatCurrency(floatSummary.totalSaved), "$0.30");
+  assert.equal(getTotalSavings(mockPurchases), 60);
+  assert.equal(formatCurrency(60.75), "$60.75");
+  assert.equal(formatCurrency(Number.NaN), "$0.00");
+});
+
+test("empty summary has stable defaults", () => {
   assert.deepEqual(getSavingsSummary([]), {
-    totalSavedCents: 0,
+    totalSaved: 0,
     purchaseCount: 0,
-    averageSavedCents: 0,
-    mostRecentSavedCents: 0,
+    averageSaved: 0,
+    mostRecentSaved: 0,
     recentPurchases: [],
   });
-  assert.equal(formatCurrency(6075), "$60.75");
-  assert.equal(formatCurrency(Number.NaN), "$0.00");
 });
 
 test("savings storage reads, validates, saves, and clears the current deal", async () => {

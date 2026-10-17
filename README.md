@@ -74,12 +74,15 @@ src/
     coupon-finder.js         [Rohit] on-demand coupon-field + cart-total detector, applyCouponOnPage (injected, not declarative)
   popup/
     popup.html/.css/.js    pending review, character, stats, due-soon returns, coupons, manual-add fallback
+    savings-view.js/.css   lifetime savings dashboard component used by options
   options/
     options.html/.css/.js  full dashboard: same pieces + settings + purchases table
   lib/
     messages.js            message type constants + send helper
     storage.js              chrome.storage.sync settings wrapper + defaults
     purchases.js            chrome.storage.local CRUD: confirmed / pending / ignored
+    savings.js              purchase validation + dollar currency formatting
+    savings-summary.js      savings summary derived from purchases.js statistics
     character.js             XP formula, tier thresholds, Pip's SVG renderer
     color.js                 hex shade() helper used by character.js
     coupons.js                [Rohit] coupon search/validate/ranking -- see Team section above
@@ -91,6 +94,9 @@ icons/                     generated placeholders — see scripts/make-icons.mjs
 scripts/
   check.mjs                verifies manifest references resolve
   make-icons.mjs            regenerates icons/*.png, no dependencies
+tests/
+  savings.test.js          savings logic + storage tests
+  mock-purchases.js        canonical-shape savings fixtures
 ```
 
 ## Scripts
@@ -109,7 +115,7 @@ npm run zip      # check + package dist/pocket.zip for the Web Store
 3. To run the extension, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select this repository's root folder (the one containing `manifest.json`). Pin Pocket, then click its toolbar icon to exercise the popup and options dashboard.
 4. For purchase-detection smoke testing, open a normal HTTP/HTTPS page that represents an order confirmation. Check the page console for content-script errors, then inspect the staged purchase in the popup. Detection is heuristic, so a miss on a regular storefront page is not by itself a failure. To test coupons, open `http://example.com`, then click **Coupons & savings** in the popup.
 
-The current `savings-storage/` files are a Phase 1 prototype: they are not referenced by `manifest.json` or wired into the popup/options UI yet. `npm test` verifies their purchase validation, savings summaries, and Chrome-storage behavior using a local mock; loading the extension does not display that prototype dashboard until it is integrated. The prototype expects a cents-based record (`originalTotalCents`, `paidTotalCents`, `savingsCents`), while the current extension purchase store uses dollar fields (`pricePaid`, `savings`) and `title`; add an adapter or agree on a shared schema before wiring the view to `src/lib/purchases.js`. Supabase setup is not required for the local extension demo.
+The savings dashboard in the options page reads the same canonical `purchases` list as the character and uses the existing `title`, `pricePaid`, `savings`, and `purchaseDate` fields. Pending purchases remain in their separate list; returned purchases continue to count toward savings, matching `getStats()`. Dollar values are rounded to cents for calculations. `npm test` covers the summary, purchase validation, currency formatting, and current-deal storage behavior. Supabase setup is not required for the local extension demo.
 
 ## Things that will bite you
 

@@ -176,19 +176,20 @@ export function purchaseStatus(purchase, now = new Date()) {
 // Aggregate stats used by both the popup and the dashboard. Keeping this in
 // one place means the character's XP and the UI's numbers can never drift.
 export function getStats(purchases, { notifyDaysBefore = 3, now = new Date() } = {}) {
-  let totalSaved = 0;
-  let savedThisMonth = 0;
+  let totalSavedCents = 0;
+  let savedThisMonthCents = 0;
   let completedReturns = 0;
   let missedReturns = 0;
   const dueSoon = [];
   const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
 
   for (const p of purchases) {
-    totalSaved += p.savings || 0;
+    const savingsCents = Number.isFinite(p.savings) ? Math.round(p.savings * 100) : 0;
+    totalSavedCents += savingsCents;
 
     const purchaseDate = p.purchaseDate ? new Date(p.purchaseDate) : null;
     if (purchaseDate && `${purchaseDate.getFullYear()}-${purchaseDate.getMonth()}` === monthKey) {
-      savedThisMonth += p.savings || 0;
+      savedThisMonthCents += savingsCents;
     }
 
     if (p.returned) {
@@ -205,8 +206,8 @@ export function getStats(purchases, { notifyDaysBefore = 3, now = new Date() } =
 
   return {
     totalItems: purchases.length,
-    totalSaved,
-    savedThisMonth,
+    totalSaved: totalSavedCents / 100,
+    savedThisMonth: savedThisMonthCents / 100,
     completedReturns,
     missedReturns,
     dueSoon,

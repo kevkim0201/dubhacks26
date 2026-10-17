@@ -2,6 +2,7 @@ import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG } from '../lib/character.js';
 import { purchaseStatus, daysUntilDeadline } from '../lib/purchases.js';
 import { onSettingsChanged } from '../lib/storage.js';
+import { updateSavingsDashboard } from '../popup/savings-view.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -41,6 +42,7 @@ const els = {
   filterTabs: $('filter-tabs'),
   body: $('purchases-body'),
   empty: $('empty-state'),
+  savingsDashboard: $('savings-dashboard'),
 };
 
 let state = null;
@@ -108,6 +110,7 @@ function renderAll() {
   renderPending();
   renderHero();
   renderStats();
+  updateSavingsDashboard(els.savingsDashboard, state.purchases || []);
   renderSettingsForm();
   renderTable();
 }
