@@ -57,9 +57,21 @@ Turn detection off entirely via the dashboard's "Detect purchases automatically"
 `src/lib/character.js` is the whole system:
 
 - **XP is literal**: `$1 saved = 10 XP` (shown to the user as-is — no hidden multipliers, no credit for money *spent*).
-- Six tiers, each with a dollar threshold: Seed ($0) → Sprout ($25) → Bloom ($250) → Grove ($750) → Orchard ($2,000) → Evergreen ($5,000).
-- Pip is **procedurally drawn SVG**, not an image asset — `renderCharacterSVG(stageKey, { skinColor, leafColor, flowerColor, size })` returns a self-contained `<svg>` string. Six stages share one geometry function; only scale/limb/leaf/flower-count parameters change per tier, so there's no per-stage artwork to maintain.
+- Four tiers, each with a dollar threshold: Seed ($0) → Sprout ($50) → Bloom ($250) → Flourish ($500, the max tier).
+- The dashboard's progress bar/ring show **absolute** progress (`xp / nextTier.minXp`, e.g. 1,284/2,500 = 51%) rather than progress relative to the current tier's own floor -- matches the percentage shown directly in the UI.
+- Pip is **procedurally drawn SVG**, not an image asset — `renderCharacterSVG(stageKey, { skinColor, leafColor, flowerColor, size })` returns a self-contained `<svg>` string. All four stages share one geometry function; only scale/limb/leaf/flower-count parameters change per tier, so there's no per-stage artwork to maintain.
 - Colors are user-themeable (dashboard settings) and rendered via a tiny hex-shading helper (`src/lib/color.js`) — no CSS color-mixing dependency.
+- Pip still drives the dashboard, the pending-review cards, and the coupons-view footer icon. The **popup's main character display is now a different character** — see below.
+
+## The squirrel (popup's main character)
+
+A second, experimental character — a 3D squirrel with an acorn pile that grows as you save — lives in `src/lib/squirrelScene.js` and is mounted once in `src/popup/popup.js` (`els.art`, the same slot that used to hold Pip's SVG). It started as a standalone prototype (`squirrel-prototype/`, still there as a fast playground — see its README) and was merged into the real popup.
+
+- **Three.js is vendored locally** at `src/lib/vendor/three.module.min.js` (~656KB, MIT licensed) rather than imported from a CDN like the standalone prototype does — Manifest V3's extension CSP (`script-src 'self'`) blocks remotely-hosted scripts in the extension's own pages. Verified against that exact policy (a page served with `script-src 'self'; object-src 'self'` via a CSP meta tag) before trusting it would work inside the real `chrome-extension://` origin.
+- **No persistence of its own.** Unlike the standalone prototype (which uses `localStorage` + simulated purchases), `squirrelScene.js` is pure rendering: `syncToXP(xp)` is called with the popup's real `character.xp` (already computed from `chrome.storage` purchases) every time the popup renders, and the acorn pile/hop reaction just follow that number. A real purchase showing up (auto-detected or manual) is what makes XP go up and an acorn drop in — not a button, not its own storage.
+- **The model is still a placeholder** (procedural spheres/cones, not a sourced `.glb`) — swapping in a real model is unchanged from the prototype's plan, just done once in `squirrelScene.js` instead of twice.
+- Adds meaningfully to popup load size (~656KB parsed/compiled on open, vs. Pip's few KB of inline SVG) — worth knowing if popup-open speed becomes a concern.
+- **Only the popup's main view changed.** The dashboard, pending-review cards, and the coupons-view's small footer icon all still render Pip. Two mascots in one app is a real product question, not yet decided either way — ask before assuming it should be unified in one direction or the other.
 
 ## Layout
 
@@ -76,7 +88,9 @@ src/
     popup.html/.css/.js    pending review, character, stats, due-soon returns, coupons, manual-add fallback
     savings-view.js/.css   lifetime savings dashboard component used by options
   options/
-    options.html/.css/.js  full dashboard: same pieces + settings + purchases table
+    options.html/.css/.js  dashboard, 3 tabs: Overview (companion card, progress ring, chapters
+                           gallery, recent savings, coupon teaser), Savings activity (pending
+                           review, manual add, settings, purchases table), How it works (static)
   lib/
     messages.js            message type constants + send helper
     storage.js              chrome.storage.sync settings wrapper + defaults
@@ -85,11 +99,19 @@ src/
     savings-summary.js      savings summary derived from purchases.js statistics
     character.js             XP formula, tier thresholds, Pip's SVG renderer
     color.js                 hex shade() helper used by character.js
+    squirrelScene.js          popup's main character -- see "The squirrel" section above
+    vendor/
+      three.module.min.js      vendored (not CDN -- see above), MIT licensed, r160
     coupons.js                [Rohit] coupon search/validate/ranking -- see Team section above
     supabase.js                [Kevin+Deetya] hand-rolled REST+Auth client, no SDK
     supabaseConfig.js           [Kevin+Deetya] gitignored -- real project URL/anon key
     supabaseConfig.example.js    [Kevin+Deetya] committed template, copy to the above
 supabase/                  [Kevin+Deetya] schema.sql + setup docs -- see supabase/README.md
+savings-storage/
+  savings-storage.js        [Kevin+Deetya] the "current deal" the dashboard's coupon teaser
+                            reads (getCurrentDealSavings/saveCurrentDealSavings/DEAL_KEY in
+                            chrome.storage.local) -- lives outside src/lib by whoever started it;
+                            left in place rather than moved, to avoid merge friction
 icons/                     generated placeholders — see scripts/make-icons.mjs
 scripts/
   check.mjs                verifies manifest references resolve
@@ -125,6 +147,7 @@ The savings dashboard in the options page reads the same canonical `purchases` l
 - **Message listeners must `return true`** to reply asynchronously, or the sender gets `undefined`.
 - **Detection is heuristic, not exhaustive.** It won't catch every retailer, and it can occasionally misfire on a page that merely *mentions* an order. That's exactly why confirmations are staged rather than auto-added — bad scrapes get caught and edited/dismissed in one tap instead of silently polluting the data.
 - **Local testing over `file://` breaks ES module `<script type="module">` tags** (CORS). If you ever build a standalone preview of the popup/options HTML outside the extension, serve it over `http://` (e.g. `python3 -m http.server`) — inside the actual extension this isn't an issue, since `chrome-extension://` pages aren't subject to the same restriction.
+- **"Sign in with Google" (dashboard, top-right avatar menu) needs external setup before it works.** The code is complete (`src/lib/supabase.js`'s `signInWithGoogle`), but Google has to be enabled as an auth provider in the Supabase dashboard first, which needs a Google Cloud OAuth client — see `supabase/README.md`'s "Google sign-in setup." Until that's done, clicking it fails with a clear error rather than crashing.
 
 ## Next steps
 

@@ -1,5 +1,6 @@
 import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG } from '../lib/character.js';
+import { mountSquirrelScene } from '../lib/squirrelScene.js';
 import { searchCoupons, rankCoupons, humanizeStoreName } from '../lib/coupons.js';
 import { renderPurchaseHistory } from './purchase-history.js';
 import { mountDealSavingsView } from '../../savings-storage/deal-savings-view.js';
@@ -70,6 +71,14 @@ let couponsCtx = { tabId: null, store: null, cartTotal: null, shipping: null, ra
 let lastDeletedPurchase = null;
 let undoBannerTimer = null;
 
+// The popup's main character display -- mounted once (it has its own
+// render loop; re-creating it on every render() would be wasteful and
+// would replay the fall-in animation every time the popup refreshes).
+// Pip (renderCharacterSVG) is still used for every *other* character
+// icon in this file (the coupons-view footer) -- only the big main-view
+// display is the 3D squirrel.
+const squirrelScene = mountSquirrelScene(els.art, { size: 150 });
+
 init();
 
 async function init() {
@@ -115,15 +124,10 @@ function render(state) {
 
   els.tierLabel.textContent = `Tier ${character.level} · ${character.stage.label}`;
 
-  els.art.innerHTML = renderCharacterSVG(character.stage.key, {
-    skinColor: settings.skinColor,
-    leafColor: settings.leafColor,
-    flowerColor: settings.flowerColor,
-    size: 150,
-  });
+  squirrelScene.syncToXP(character.xp);
 
   els.caption.textContent = character.stageIndex === 0
-    ? `${settings.characterName} is waiting to sprout.`
+    ? `${settings.characterName} is waiting for your first saved purchase.`
     : `${settings.characterName}'s growing, thanks to your savings.`;
 
   if (character.next) {
