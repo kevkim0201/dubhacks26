@@ -57,9 +57,9 @@ Turn detection off entirely via the dashboard's "Detect purchases automatically"
 `src/lib/character.js` is the whole system:
 
 - **XP is literal**: `$1 saved = 10 XP` (shown to the user as-is — no hidden multipliers, no credit for money *spent*).
-- Four tiers, each with a dollar threshold: Seed ($0) → Sprout ($50) → Bloom ($250) → Flourish ($500, the max tier).
+- Five tiers, each with a dollar threshold: Baby Squirrel ($0) → Scout ($25) → Forager ($100) → Hoarder ($300) → Golden Squirrel ($750, the max tier). Per-tier accessories/environment/fur described in the squirrel design plan aren't built yet — only the tier names/thresholds moved over so far.
 - The dashboard's progress bar/ring show **absolute** progress (`xp / nextTier.minXp`, e.g. 1,284/2,500 = 51%) rather than progress relative to the current tier's own floor -- matches the percentage shown directly in the UI.
-- Pip is **procedurally drawn SVG**, not an image asset — `renderCharacterSVG(stageKey, { skinColor, leafColor, flowerColor, size })` returns a self-contained `<svg>` string. All four stages share one geometry function; only scale/limb/leaf/flower-count parameters change per tier, so there's no per-stage artwork to maintain.
+- Pip is **procedurally drawn SVG**, not an image asset — `renderCharacterSVG(stageKey, { skinColor, leafColor, flowerColor, size })` returns a self-contained `<svg>` string. All five stages share one geometry function; only scale/limb/leaf/flower-count parameters change per tier, so there's no per-stage artwork to maintain.
 - Colors are user-themeable (dashboard settings) and rendered via a tiny hex-shading helper (`src/lib/color.js`) — no CSS color-mixing dependency.
 - Pip still drives the dashboard, the pending-review cards, and the coupons-view footer icon. The **popup's main character display is now a different character** — see below.
 
