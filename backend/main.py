@@ -1,10 +1,11 @@
-import json
+import os
 import re
 import urllib.parse
 from typing import List, Optional
 import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -12,6 +13,10 @@ app = FastAPI(
     description="Live coupon extraction service powered by Honey store resolution and public store feeds",
     version="1.0.0",
 )
+
+DEMO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "demo"))
+if os.path.exists(DEMO_DIR):
+    app.mount("/demo", StaticFiles(directory=DEMO_DIR, html=True), name="demo")
 
 # Enable CORS for browser extensions and local testing
 app.add_middleware(
