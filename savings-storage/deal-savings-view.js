@@ -7,23 +7,40 @@
 // refresh. The card hides itself when there's no deal, or when the stored
 // deal belongs to a different page than the one the popup was opened on.
 import {
+  clearCurrentDealSavings,
   getCurrentDealSavings,
   onCurrentDealSavingsChanged,
 } from './savings-storage.js';
 import { formatCurrency } from '../src/lib/savings.js';
+import { MSG, sendToBackground } from '../src/lib/messages.js';
+import {
+  confirmDetailsFromDeal,
+  openPurchaseConfirmModal,
+} from '../src/popup/purchase-confirm-modal.js';
 
 /**
  * Render the card into `container` and keep it in sync with storage.
  * @param {HTMLElement} container  empty element the card renders into
- * @param {{ tabUrl?: string }} [opts]  active tab's URL; when given, a deal
- *   saved for a different page is treated as stale and not shown
+ * @param {{ tabUrl?: string, onPurchaseSaved?: (state: object) => void }} [opts]
+ *   tabUrl: active tab's URL; when given, a deal saved for a different
+ *   page is treated as stale and not shown. onPurchaseSaved: called with
+ *   the background's new state after "I bought this" saves the purchase,
+ *   so the popup can redraw its totals and history.
  * @returns {Promise<() => void>} unmount function (stops listening)
  */
-export async function mountDealSavingsView(container, { tabUrl } = {}) {
+export async function mountDealSavingsView(container, { tabUrl, onPurchaseSaved } = {}) {
   const card = buildCard();
   container.replaceChildren(card.root);
 
-  const update = (deal) => renderDeal(card, isForPage(deal, tabUrl) ? deal : null);
+  let current = null;
+  const update = (deal) => {
+    current = isForPage(deal, tabUrl) ? deal : null;
+    renderDeal(card, current);
+  };
+
+  card.bought.addEventListener('click', () => {
+    if (current) confirmDealPurchase(current, onPurchaseSaved);
+  });
 
   update(await getCurrentDealSavings());
   const unsubscribe = onCurrentDealSavingsChanged(update);
@@ -71,6 +88,8 @@ function buildCard() {
       </div>
       <span class="deal-card__total-amount" data-ref="potential"></span>
     </div>
+
+    <button type="button" class="deal-card__bought primary" data-ref="bought">I bought this</button>
   `;
 
   const refs = Object.fromEntries(
@@ -109,6 +128,32 @@ function renderDeal(card, deal) {
   card.pct.textContent = originalPrice > 0 && potential > 0
     ? `${Math.round((potential / originalPrice) * 100)}% off · you'd pay ${formatCurrency(originalPrice - potential)}`
     : 'No savings found yet';
+}
+
+/**
+ * The purchase to record for a deal: paid the sale price minus the
+ * coupon, saved the potential savings. Matches confirmDetailsFromDeal(),
+ * so the modal shows exactly what gets saved.
+ */
+export function purchaseFromDeal(deal) {
+  const { title, store, finalPrice, savings } = confirmDetailsFromDeal(deal);
+  return { title, store, url: deal.url || '', pricePaid: finalPrice, savings, source: 'manual' };
+}
+
+// Confirm, then save through the background's normal add-purchase flow
+// and clear the deal so its savings can't be counted twice.
+function confirmDealPurchase(deal, onPurchaseSaved) {
+  openPurchaseConfirmModal({
+    ...confirmDetailsFromDeal(deal),
+    onConfirm: async () => {
+      const state = await sendToBackground(MSG.ADD_PURCHASE, purchaseFromDeal(deal));
+      if (state?.ok) {
+        await clearCurrentDealSavings();
+        onPurchaseSaved?.(state);
+      }
+      return state ?? { ok: false };
+    },
+  });
 }
 
 // A deal without a url can't be checked, so it's assumed current.

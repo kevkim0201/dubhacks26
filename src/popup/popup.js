@@ -5,6 +5,7 @@ import { searchCoupons, rankCoupons, humanizeStoreName } from '../lib/coupons.js
 import { renderPurchaseHistory } from './purchase-history.js';
 import { mountDealSavingsView } from '../../savings-storage/deal-savings-view.js';
 import { seedMockDealIfDemo } from '../../savings-storage/mock-deal.js';
+import { openPurchaseConfirmModal, confirmDetailsFromPending } from './purchase-confirm-modal.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -104,7 +105,7 @@ async function init() {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   await seedMockDealIfDemo(tab?.url).catch(() => {});
-  mountDealSavingsView(els.dealSavings, { tabUrl: tab?.url });
+  mountDealSavingsView(els.dealSavings, { tabUrl: tab?.url, onPurchaseSaved: render });
 }
 
 function showView(view) {
@@ -166,14 +167,21 @@ function renderPending(pending) {
       </div>
     `;
 
-    card.querySelector('.p-confirm').addEventListener('click', async () => {
+    card.querySelector('.p-confirm').addEventListener('click', () => {
       const patch = {
         title: card.querySelector('.p-title').value,
         pricePaid: card.querySelector('.p-price').value,
         savings: card.querySelector('.p-savings').value,
       };
-      const state = await sendToBackground(MSG.CONFIRM_PENDING, { id: p.id, patch });
-      if (state?.ok) { render(state); setStatus(`Added "${patch.title}".`); }
+      // Show what's being saved before it's recorded.
+      openPurchaseConfirmModal({
+        ...confirmDetailsFromPending({ ...p, ...patch }),
+        onConfirm: async () => {
+          const state = await sendToBackground(MSG.CONFIRM_PENDING, { id: p.id, patch });
+          if (state?.ok) { render(state); setStatus(`Added "${patch.title}".`); }
+          return state ?? { ok: false };
+        },
+      });
     });
 
     card.querySelector('.p-dismiss').addEventListener('click', async () => {
