@@ -3,6 +3,7 @@ import { renderCharacterSVG } from '../lib/character.js';
 import { purchaseStatus, daysUntilDeadline } from '../lib/purchases.js';
 import { onSettingsChanged } from '../lib/storage.js';
 import { updateSavingsDashboard } from '../popup/savings-view.js';
+import { onPurchasesChanged } from '../../savings-storage/savings-storage.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -101,6 +102,12 @@ async function init() {
 
   // Keep in sync if the popup changes settings while this page is open.
   onSettingsChanged(async () => {
+    const res = await sendToBackground(MSG.GET_STATE);
+    if (res?.ok) { state = res; renderAll(); }
+  });
+
+  // Same for purchases confirmed or added from the popup.
+  onPurchasesChanged(async () => {
     const res = await sendToBackground(MSG.GET_STATE);
     if (res?.ok) { state = res; renderAll(); }
   });

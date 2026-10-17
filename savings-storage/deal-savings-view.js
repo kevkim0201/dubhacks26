@@ -10,6 +10,7 @@ import {
   getCurrentDealSavings,
   onCurrentDealSavingsChanged,
 } from './savings-storage.js';
+import { formatCurrency } from '../src/lib/savings.js';
 
 /**
  * Render the card into `container` and keep it in sync with storage.
@@ -85,8 +86,8 @@ function renderDeal(card, deal) {
   }
   card.root.hidden = false;
 
-  const { originalPrice, discountedPrice, couponSavings = 0 } = deal;
-  const potential = deal.potentialSavings ?? originalPrice - discountedPrice + couponSavings;
+  // potentialSavings is always set by saveCurrentDealSavings().
+  const { originalPrice, discountedPrice, couponSavings = 0, potentialSavings: potential } = deal;
   const saleSavings = originalPrice - discountedPrice;
 
   card.store.textContent = deal.store || '';
@@ -94,19 +95,19 @@ function renderDeal(card, deal) {
   card.title.textContent = deal.title || '';
   card.title.hidden = !deal.title;
 
-  card.original.textContent = formatMoney(originalPrice);
+  card.original.textContent = formatCurrency(originalPrice);
   // Strike through the original only when there's actually a sale price.
   card.original.classList.toggle('is-struck', saleSavings > 0);
 
-  card.discounted.textContent = formatMoney(discountedPrice);
+  card.discounted.textContent = formatCurrency(discountedPrice);
 
-  card.coupon.textContent = couponSavings > 0 ? `−${formatMoney(couponSavings)}` : '—';
+  card.coupon.textContent = couponSavings > 0 ? `−${formatCurrency(couponSavings)}` : '—';
   card.code.textContent = deal.couponCode || '';
   card.code.hidden = !deal.couponCode;
 
-  card.potential.textContent = formatMoney(potential);
+  card.potential.textContent = formatCurrency(potential);
   card.pct.textContent = originalPrice > 0 && potential > 0
-    ? `${Math.round((potential / originalPrice) * 100)}% off · you'd pay ${formatMoney(originalPrice - potential)}`
+    ? `${Math.round((potential / originalPrice) * 100)}% off · you'd pay ${formatCurrency(originalPrice - potential)}`
     : 'No savings found yet';
 }
 
@@ -124,8 +125,4 @@ function pageKey(url) {
   } catch {
     return url;
   }
-}
-
-function formatMoney(n) {
-  return `$${Number(n || 0).toFixed(2)}`;
 }

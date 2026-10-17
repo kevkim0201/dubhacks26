@@ -2,6 +2,7 @@ import {
   addPurchase,
   getPurchases as getStoredPurchases,
 } from "../src/lib/purchases.js";
+import { calculateSavings, isValidPurchase } from "../src/lib/savings.js";
 
 const DEAL_KEY = "currentDealSavings";
 // Confirmed purchases are owned by src/lib/purchases.js (William's format,
@@ -61,15 +62,13 @@ export async function saveCurrentDealSavings(deal) {
     );
   }
 
-  const potentialSavings = Math.max(
-    0,
-    originalPrice - discountedPrice + couponSavings
-  );
-
   const savedDeal = {
     ...deal,
     couponSavings,
-    potentialSavings: Number(potentialSavings.toFixed(2)),
+    potentialSavings: calculateSavings(
+      originalPrice,
+      discountedPrice - couponSavings
+    ),
     updatedAt: new Date().toISOString(),
   };
 
@@ -128,23 +127,21 @@ export async function savePurchase(purchase) {
     throw new TypeError("A purchase object is required.");
   }
 
-  const { title, pricePaid, savings = 0 } = purchase;
+  const record = {
+    ...purchase,
+    savings: purchase.savings ?? 0,
+    purchaseDate: purchase.purchaseDate ?? new Date().toISOString(),
+  };
 
-  if (typeof title !== "string" || title.trim() === "") {
-    throw new TypeError("title must be a non-empty string.");
+  // Same rules the dashboard uses, so nothing saved here gets filtered out
+  // there. The id is a placeholder; addPurchase() generates the real one.
+  if (!isValidPurchase({ ...record, id: "new" })) {
+    throw new TypeError(
+      "A purchase needs a title and non-negative pricePaid and savings."
+    );
   }
 
-  for (const [name, value] of Object.entries({ pricePaid, savings })) {
-    if (
-      typeof value !== "number" ||
-      !Number.isFinite(value) ||
-      value < 0
-    ) {
-      throw new TypeError(`${name} must be a non-negative number.`);
-    }
-  }
-
-  return addPurchase({ ...purchase, savings });
+  return addPurchase(record);
 }
 
 /**
