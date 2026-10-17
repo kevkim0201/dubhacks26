@@ -142,6 +142,58 @@ export async function validateCoupon({ code, store, cartTotal } = {}) {
   }
 }
 
+/**
+ * Live Autonomous Runner: Injects the auto-apply agent into the active page,
+ * tests candidate coupons, logs validation results, and re-applies the winning deal.
+ * @param {{ store?: string, coupons: Coupon[] }} params
+ */
+export async function autoApplyCoupons({ store, coupons = [] } = {}) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.id) {
+      return { success: false, reason: 'No active tab found' };
+    }
+
+    // 1. Ensure coupon-finder script is loaded in page
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['src/content/coupon-finder.js'],
+    });
+
+    // 2. Trigger autonomous loop on page
+    const [runRes] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (candidateCoupons) => {
+        if (typeof window.__dubhacksCouponFinder?.runAutoApplyLoop === 'function') {
+          return window.__dubhacksCouponFinder.runAutoApplyLoop(candidateCoupons);
+        }
+        return { success: false, reason: 'Runner agent not initialized on page' };
+      },
+      args: [coupons],
+    });
+
+    const summary = runRes?.result;
+
+    // 3. Log results to Supabase in background (non-blocking)
+    if (summary?.results && Array.isArray(summary.results)) {
+      for (const r of summary.results) {
+        insertInto('coupon_validations', {
+          code: r.code,
+          store: store || tab.url,
+          valid: r.valid,
+          discount_applied: r.discountApplied,
+          created_at: new Date().toISOString(),
+        }).catch(() => {});
+      }
+    }
+
+    return summary || { success: false, reason: 'Execution failed' };
+  } catch (err) {
+    console.error('[DubHacks26] autoApplyCoupons failed:', err);
+    return { success: false, reason: err.message };
+  }
+}
+
 /** Dollars a single coupon saves against a specific cart. Pure function. */
 export function computeCouponSavings(coupon, { cartTotal = 0, shipping = 0 } = {}) {
   switch (coupon.discountType) {

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Target Checkout Simulator — Pocket Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f4f4f5;
+      color: #18181b;
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .checkout-container {
+      width: 100%;
+      max-width: 480px;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.06);
+      padding: 30px;
+      box-sizing: border-box;
+    }
+    .store-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 2px solid #f4f4f5;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .store-logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #cc0000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 20px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      font-weight: 800;
+    }
+    .order-summary {
+      background: #fafafa;
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 24px;
+    }
+    .line-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #52525b;
+    }
+    .line-item.discount-line {
+      color: #16a34a;
+      font-weight: 700;
+      display: none;
+    }
+    .line-item.total-line {
+      border-top: 1px solid #e4e4e7;
+      padding-top: 12px;
+      margin-top: 12px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #09090b;
+    }
+    /* Collapsible accordion */
+    .promo-section {
+      margin-bottom: 24px;
+    }
+    .accordion-trigger {
+      background: none;
+      border: none;
+      color: #cc0000;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .accordion-trigger:hover {
+      text-decoration: underline;
+    }
+    .accordion-content {
+      display: none;
+      margin-top: 12px;
+    }
+    .accordion-content.is-open {
+      display: block;
+    }
+    .promo-input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .promo-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1.5px solid #d4d4d8;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .promo-input:focus {
+      border-color: #cc0000;
+    }
+    .apply-button {
+      background: #18181b;
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .apply-button:hover {
+      background: #27272a;
+    }
+    .promo-feedback {
+      font-size: 13px;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+    .promo-feedback.success { color: #16a34a; font-weight: 600; }
+    .promo-feedback.error { color: #dc2626; }
+    .active-chip {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #15803d;
+      margin-top: 8px;
+    }
+    .remove-btn {
+      background: none;
+      border: none;
+      color: #15803d;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 0 4px;
+    }
+    .remove-btn:hover { color: #dc2626; }
+    .demo-controls {
+      border-top: 2px dashed #e4e4e7;
+      padding-top: 20px;
+      margin-top: 24px;
+    }
+    .demo-btn {
+      width: 100%;
+      padding: 12px;
+      background: #2f6b4f;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .demo-btn:hover { background: #24533d; }
+  </style>
+</head>
+<body>
+
+<div class="checkout-container">
+  <div class="store-header">
+    <div class="store-logo">◎</div>
+    <div>
+      <h1>Target Checkout</h1>
+      <span style="font-size: 12px; color: #71717a;">target.com order #492810</span>
+    </div>
+  </div>
+
+  <div class="order-summary">
+    <div class="line-item">
+      <span>Subtotal</span>
+      <span id="subtotal-val">$120.00</span>
+    </div>
+    <div class="line-item">
+      <span>Standard Shipping</span>
+      <span id="shipping-val">$6.00</span>
+    </div>
+    <div class="line-item discount-line" id="discount-row">
+      <span id="discount-label">Promo Discount</span>
+      <span id="discount-val">-$0.00</span>
+    </div>
+    <div class="line-item total-line">
+      <span>Order Total</span>
+      <span id="total-val">$126.00</span>
+    </div>
+  </div>
+
+  <!-- Collapsible Promo Box to test ensurePromoFieldVisible() -->
+  <div class="promo-section">
+    <button type="button" class="accordion-trigger" id="promo-toggle">
+      <span>+ Add a promo or coupon code</span>
+    </button>
+    <div class="accordion-content" id="promo-drawer">
+      <div class="promo-input-row">
+        <input type="text" class="promo-input" id="coupon-field" placeholder="Enter coupon code" />
+        <button type="button" class="apply-button" id="apply-coupon-btn">Apply</button>
+      </div>
+      <div class="active-chip" id="applied-chip">
+        <span id="applied-chip-text">Applied: CIRCLE10</span>
+        <button type="button" class="remove-btn" id="remove-coupon-btn" title="Remove coupon">✕ Remove</button>
+      </div>
+      <div class="promo-feedback" id="promo-msg"></div>
+    </div>
+  </div>
+
+  <div class="demo-controls">
+    <p style="font-size: 12px; color: #71717a; margin-top: 0; margin-bottom: 10px;">
+      💡 <strong>Testing with Pocket Extension:</strong> Open the Pocket extension popup and click <strong>"⚡ Auto-Test All Codes"</strong>, or click the button below to test the agent directly in this tab.
+    </p>
+    <button type="button" class="demo-btn" id="run-agent-btn">
+      <span>⚡ Trigger Pocket Autonomous Runner</span>
+    </button>
+  </div>
+</div>
+
+<script>
+  // Store checkout state
+  const BASELINE_SUBTOTAL = 120.00;
+  const SHIPPING = 6.00;
+  let activeDiscount = 0;
+  let activeCode = '';
+
+  const drawer = document.getElementById('promo-drawer');
+  const toggle = document.getElementById('promo-toggle');
+  const input = document.getElementById('coupon-field');
+  const applyBtn = document.getElementById('apply-coupon-btn');
+  const removeBtn = document.getElementById('remove-coupon-btn');
+  const chip = document.getElementById('applied-chip');
+  const chipText = document.getElementById('applied-chip-text');
+  const msg = document.getElementById('promo-msg');
+  const discountRow = document.getElementById('discount-row');
+  const discountVal = document.getElementById('discount-val');
+  const totalVal = document.getElementById('total-val');
+
+  toggle.addEventListener('click', () => {
+    drawer.classList.toggle('is-open');
+    if (drawer.classList.contains('is-open')) {
+      input.focus();
+    }
+  });
+
+  function updateOrderDisplay() {
+    if (activeDiscount > 0) {
+      discountRow.style.display = 'flex';
+      discountVal.textContent = `-$${activeDiscount.toFixed(2)}`;
+      chip.style.display = 'flex';
+      chipText.textContent = `Applied: ${activeCode} (-$${activeDiscount.toFixed(2)})`;
+    } else {
+      discountRow.style.display = 'none';
+      chip.style.display = 'none';
+    }
+    const finalTotal = BASELINE_SUBTOTAL + SHIPPING - activeDiscount;
+    totalVal.textContent = `$${finalTotal.toFixed(2)}`;
+  }
+
+  applyBtn.addEventListener('click', () => {
+    const code = (input.value || '').trim().toUpperCase();
+    if (!code) return;
+
+    // Simulate real store coupon validation
+    if (code === 'RANDOLPH') {
+      activeDiscount = 48.00; // 40% off $120
+      activeCode = code;
+      msg.className = 'promo-feedback success';
+      msg.textContent = 'Code applied! 40% off verified discount.';
+      updateOrderDisplay();
+    } else if (code === 'CIRCLE10') {
+      activeDiscount = 12.00; // 10% off
+      activeCode = code;
+      msg.className = 'promo-feedback success';
+      msg.textContent = 'Target Circle 10% coupon applied!';
+      updateOrderDisplay();
+    } else if (code === 'SAVE5') {
+      activeDiscount = 5.00;
+      activeCode = code;
+      msg.className = 'promo-feedback success';
+      msg.textContent = '$5 off orders over $40 applied!';
+      updateOrderDisplay();
+    } else if (code === 'POCKET20') {
+      activeDiscount = 24.00;
+      activeCode = code;
+      msg.className = 'promo-feedback success';
+      msg.textContent = 'POCKET20 applied: 20% off items!';
+      updateOrderDisplay();
+    } else {
+      msg.className = 'promo-feedback error';
+      msg.textContent = `Promo code "${code}" is invalid or expired.`;
+    }
+  });
+
+  removeBtn.addEventListener('click', () => {
+    activeDiscount = 0;
+    activeCode = '';
+    input.value = '';
+    msg.textContent = '';
+    updateOrderDisplay();
+  });
+
+  // Direct standalone runner tester button
+  document.getElementById('run-agent-btn').addEventListener('click', async () => {
+    if (!window.__dubhacksCouponFinder) {
+      const script = document.createElement('script');
+      script.src = '../src/content/coupon-finder.js';
+      document.body.appendChild(script);
+      await new Promise(r => setTimeout(r, 200));
+    }
+    if (window.__dubhacksCouponFinder?.runAutoApplyLoop) {
+      window.__dubhacksCouponFinder.runAutoApplyLoop([
+        { id: '1', code: 'INVALID99', description: 'Fake code' },
+        { id: '2', code: 'SAVE5', description: '$5 off' },
+        { id: '3', code: 'RANDOLPH', description: '40% off Target verified code' },
+        { id: '4', code: 'CIRCLE10', description: '10% off Target Circle' }
+      ]);
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -13,6 +13,8 @@ export const MSG = {
   DISMISS_PENDING: 'dismiss-pending',
   RESOLVE_STORE: 'resolve-store',
   GET_TAB_STORE: 'get-tab-store',
+  GET_COUPONS_FOR_PAGE: 'get-coupons-for-page',
+  RUN_AUTO_APPLY: 'run-auto-apply',
 };
 
 // Send a message to the service worker and return its response.

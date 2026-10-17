@@ -1,7 +1,7 @@
 import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG } from '../lib/character.js';
 import { mountSquirrelScene } from '../lib/squirrelScene.js';
-import { searchCoupons, rankCoupons, humanizeStoreName } from '../lib/coupons.js';
+import { searchCoupons, rankCoupons, autoApplyCoupons, humanizeStoreName } from '../lib/coupons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -52,6 +52,8 @@ const els = {
   couponsFootnote: $('coupons-footnote'),
   couponsInsight: $('coupons-insight'),
   couponsInsightText: $('coupons-insight-text'),
+  autoTestBtn: $('auto-test-coupons'),
+  autoTestBtnLabel: $('auto-test-btn-label'),
   applyBtn: $('apply-coupon'),
   applyBtnLabel: $('apply-btn-label'),
   applyCaption: $('apply-caption'),
@@ -91,6 +93,7 @@ async function init() {
   els.scanPage.addEventListener('click', onScanPage);
   els.openCoupons.addEventListener('click', onOpenCoupons);
   els.couponsBack.addEventListener('click', () => showView('main'));
+  els.autoTestBtn.addEventListener('click', onAutoTestAll);
   els.applyBtn.addEventListener('click', onApplyCoupon);
 
   // Honey Lifecycle: Automatically resolve current tab store & update nav pill
@@ -359,6 +362,8 @@ function resetCouponsView() {
   els.saveCard.hidden = true;
   els.couponsFootnote.hidden = true;
   els.couponsInsight.hidden = true;
+  els.autoTestBtn.disabled = true;
+  els.autoTestBtnLabel.textContent = 'Auto-Test All Codes';
   els.applyBtn.disabled = true;
   els.applyBtnLabel.textContent = 'Select a coupon';
   couponsCtx = { tabId: null, store: null, cartTotal: null, shipping: null, ranked: [], selectedId: null };
@@ -380,6 +385,8 @@ function renderCouponOptions(coupons) {
   if (!coupons.length) {
     els.couponsNone.hidden = false;
     els.couponsCount.textContent = '0 offers';
+    els.autoTestBtn.disabled = true;
+    els.autoTestBtnLabel.textContent = 'No codes to test';
     return;
   }
   els.couponsNone.hidden = true;
@@ -394,6 +401,9 @@ function renderCouponOptions(coupons) {
 
   els.couponsCount.textContent = `${ranked.length} offer${ranked.length === 1 ? '' : 's'}`;
   els.couponsFootnote.hidden = cartTotal == null;
+
+  els.autoTestBtn.disabled = false;
+  els.autoTestBtnLabel.textContent = `⚡ Auto-Test All (${ranked.length}) Codes`;
 
   for (const c of ranked) {
     els.couponOptions.appendChild(buildCouponOption(c));
@@ -505,6 +515,41 @@ function renderInsight(ranked) {
   }
   els.couponsInsight.hidden = false;
   els.couponsInsightText.textContent = `${eligible[0].code} saves ${formatMoney(diff)} more than ${eligible[1].code}.`;
+}
+
+async function onAutoTestAll() {
+  if (!couponsCtx.tabId || !couponsCtx.ranked.length) return;
+  els.autoTestBtn.disabled = true;
+  els.applyBtn.disabled = true;
+  els.autoTestBtnLabel.textContent = 'Agent testing in tab…';
+  setCouponsStatus('Launched on-page auto-tester agent!');
+
+  try {
+    const summary = await autoApplyCoupons({
+      store: couponsCtx.store,
+      coupons: couponsCtx.ranked,
+    });
+
+    if (summary?.bestCoupon) {
+      els.saveStatus.textContent = 'Best Deal Applied';
+      els.saveStatus.className = 'save-card__status save-card__status--applied';
+      setCouponsStatus(`🎉 Winner: ${summary.bestCoupon.code} saved $${summary.maxSavings.toFixed(2)}!`);
+      couponsCtx.selectedId = summary.bestCoupon.id;
+      for (const el of els.couponOptions.querySelectorAll('.coupon-option')) {
+        el.classList.toggle('is-selected', el.dataset.id === couponsCtx.selectedId);
+      }
+      renderSaveCard();
+    } else {
+      setCouponsStatus('Agent finished testing available codes.');
+    }
+  } catch (err) {
+    setCouponsStatus("Couldn't run auto-tester on this page.");
+  } finally {
+    els.autoTestBtn.disabled = false;
+    els.autoTestBtnLabel.textContent = `⚡ Auto-Test All (${couponsCtx.ranked.length}) Codes`;
+    const selected = couponsCtx.ranked.find((c) => c.id === couponsCtx.selectedId);
+    els.applyBtn.disabled = !selected?.eligible;
+  }
 }
 
 async function onApplyCoupon() {

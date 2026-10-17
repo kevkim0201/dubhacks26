@@ -15,6 +15,7 @@ import {
 } from '../lib/purchases.js';
 import { xpFromStats, computeLevel } from '../lib/character.js';
 import { resolveStoreFromUrl } from '../lib/store-matcher.js';
+import { searchCoupons, autoApplyCoupons } from '../lib/coupons.js';
 
 const ALARM_NAME = 'check-returns';
 
@@ -161,6 +162,18 @@ async function handleMessage({ type, payload }) {
     case MSG.GET_TAB_STORE: {
       const entry = await getStoreByTabId(payload?.tabId);
       return { ok: true, entry };
+    }
+
+    case MSG.GET_COUPONS_FOR_PAGE: {
+      const { url, store } = payload || {};
+      const coupons = await searchCoupons({ store, url });
+      return { ok: true, coupons };
+    }
+
+    case MSG.RUN_AUTO_APPLY: {
+      const { store, coupons } = payload || {};
+      const result = await autoApplyCoupons({ store, coupons });
+      return { ok: true, result };
     }
 
     default:

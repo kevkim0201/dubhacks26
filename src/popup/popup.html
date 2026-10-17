@@ -161,7 +161,7 @@
         <p class="section-title">Available coupons</p>
         <span class="coupons-count" id="coupons-count">0 offers</span>
       </div>
-      <p class="coupons-hint">Choose one &middot; these coupons don't stack.</p>
+      <p class="coupons-hint">Choose one or let Pocket auto-test all.</p>
 
       <div class="coupon-options" id="coupon-options"></div>
       <p class="coupons-loading" id="coupons-loading">Looking for coupons…</p>
@@ -176,13 +176,20 @@
         <span id="coupons-insight-text"></span>
       </p>
 
-      <button type="button" class="apply-btn" id="apply-coupon" disabled>
-        <span id="apply-btn-label">Select a coupon</span>
+      <button type="button" class="auto-test-btn" id="auto-test-coupons" disabled>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+        </svg>
+        <span id="auto-test-btn-label">Auto-Test All Codes</span>
+      </button>
+
+      <button type="button" class="apply-btn apply-btn--secondary" id="apply-coupon" disabled>
+        <span id="apply-btn-label">Apply selected coupon</span>
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
           <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </button>
-      <p class="apply-caption" id="apply-caption">Final discount confirmed at checkout.</p>
+      <p class="apply-caption" id="apply-caption">Autonomous agent tests each code and keeps the biggest saving.</p>
 
       <hr class="divider" />
 
