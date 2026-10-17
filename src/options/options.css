@@ -345,6 +345,29 @@ h3 { margin: 20px 0 8px; font-size: 13px; }
 
 .stat-card__foot .accent { color: var(--accent); font-weight: 700; }
 
+.stat-card__summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.stat-card__summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-card__summary span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stat-card__summary strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .recent-card__head {
   display: flex;
   align-items: center;

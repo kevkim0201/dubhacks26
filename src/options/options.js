@@ -2,7 +2,7 @@ import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG, STAGES } from '../lib/character.js';
 import { purchaseStatus, daysUntilDeadline } from '../lib/purchases.js';
 import { onSettingsChanged } from '../lib/storage.js';
-import { updateSavingsDashboard } from '../popup/savings-view.js';
+import { getSavingsSummary } from '../lib/savings-summary.js';
 import { onPurchasesChanged, getCurrentDealSavings } from '../../savings-storage/savings-storage.js';
 import { signInWithGoogle, signOut, getUser } from '../lib/supabase.js';
 import { mountSquirrelScene } from '../lib/squirrelScene.js';
@@ -42,6 +42,8 @@ const els = {
   progressFraction: $('progress-fraction'),
   sideTotalSaved: $('side-total-saved'),
   sideThisMonth: $('side-this-month'),
+  sideAverageSaved: $('side-average-saved'),
+  sidePurchaseCount: $('side-purchase-count'),
   recentList: $('recent-list'),
   recentEmpty: $('recent-empty'),
   couponTeaser: $('coupon-teaser'),
@@ -80,7 +82,6 @@ const els = {
   filterTabs: $('filter-tabs'),
   body: $('purchases-body'),
   empty: $('empty-state'),
-  savingsDashboard: $('savings-dashboard'),
 };
 
 let state = null;
@@ -302,12 +303,13 @@ function renderXpToast(purchases, settings) {
 
 async function renderSideCol() {
   const { stats, purchases } = state;
-  els.sideTotalSaved.textContent = formatMoney(stats.totalSaved);
+  const summary = getSavingsSummary(purchases);
+  els.sideTotalSaved.textContent = formatMoney(summary.totalSaved);
   els.sideThisMonth.textContent = `+${formatMoney(stats.savedThisMonth)}`;
+  els.sideAverageSaved.textContent = formatMoney(summary.averageSaved);
+  els.sidePurchaseCount.textContent = String(summary.purchaseCount);
 
-  const recent = [...purchases]
-    .sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate))
-    .slice(0, 3);
+  const recent = summary.recentPurchases.slice(0, 3);
 
   els.recentList.innerHTML = '';
   els.recentEmpty.hidden = recent.length > 0;

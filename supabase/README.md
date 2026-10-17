@@ -11,7 +11,7 @@ client instead of the `@supabase/supabase-js` npm package.
 ## Setup
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor** in the dashboard, paste in [`schema.sql`](./schema.sql), and run it. That creates `profiles`, `purchases`, `coupons`, and `coupon_validations`, each with Row Level Security policies already enabled.
+2. For a **new** project, open **SQL Editor**, paste in [`schema.sql`](./schema.sql), and run it once. It creates `profiles`, `purchases`, `coupons`, and `coupon_validations`, with Row Level Security enabled. If your project already has an earlier version of this schema, do not rerun the whole file; apply these changes through an incremental migration after checking existing data.
 3. Go to **Project Settings -> API** and copy the **Project URL** and **anon public** key.
 4. In the repo: `cp src/lib/supabaseConfig.example.js src/lib/supabaseConfig.js` and paste those two values in. This file is gitignored -- every teammate runs their own copy against the same shared project (or their own, while prototyping).
 5. Reload the extension. `src/lib/supabase.js` exports `selectFrom` / `insertInto` / `updateTable` / `deleteFrom` plus auth: `signUp` / `signIn` / `signInWithGoogle` / `signOut` / `getSession` / `getUser` / `refreshSession`.
@@ -61,3 +61,27 @@ If it still doesn't work: open the dashboard's console and check for an error fr
 ## Where this plugs into the coupon feature
 
 Rohit's/your teammates' `src/lib/coupons.js` has a `TODO` marking exactly where it should call `selectFrom('coupons', { filters: { store } })` once there's real data in the table. That's the integration seam between the two workstreams -- no need to touch each other's files to connect them later.
+
+### Coupon submission and review
+
+- Signed-in users can submit coupon candidates. New rows default to
+  `review_status = 'pending'` and `is_active = false`, and submissions are
+  visible only to their submitter until approved.
+- A trusted moderator must set `review_status = 'approved'` and
+  `is_active = true` before a coupon is visible to the public coupon lookup.
+  Expired or inactive coupons are filtered out by Row Level Security.
+- The database stores `min_cart`, validates non-negative amounts and
+  percentage discounts no greater than 100%, and enforces a case-insensitive
+  unique `(store, code)` pair after trimming whitespace.
+- Clients cannot edit moderation state or success/failure counters.
+  `coupon_validations` rows are private to their owner; an insert trigger
+  updates the aggregate counters. Validation rows and cart totals are still
+  browser-reported, so those counters are signals, not proof a code worked.
+- `searchCoupons()` still uses mock data today. The schema is ready for the
+  lookup, but the client query and snake_case-to-camelCase mapping still need
+  to be implemented before Supabase coupons appear in the extension.
+
+When applying this schema to a database that already has coupon data, review
+any duplicate store/code pairs and invalid discounts before running it: the
+new unique index and constraints intentionally reject those rows rather than
+silently choosing one.

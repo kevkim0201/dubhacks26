@@ -59,7 +59,7 @@ create table if not exists purchases (
   -- `validated_at` are never client-writable (see the column grants
   -- below) -- only validate_purchase() sets them, after re-checking the
   -- claim against coupon_validations rather than trusting it outright.
-  coupon_id uuid references coupons (id),
+  coupon_id uuid,
   status text not null default 'pending_validation' check (status in ('pending_validation', 'validated', 'rejected')),
   acorns_awarded integer not null default 0,
   validated_at timestamptz
@@ -105,10 +105,9 @@ create index if not exists purchases_return_deadline_idx on purchases (return_de
 create index if not exists purchases_status_idx on purchases (status) where status = 'pending_validation';
 
 -- ---------------------------------------------------------------------------
--- coupons: community-sourced coupon codes. Readable by anyone (anon key),
--- so the extension can look up codes before a user is signed in at all.
--- Writes are left open to any authenticated user for now -- tighten this
--- (e.g. require a moderation flag) once the submission flow exists.
+-- coupons: community-sourced coupon codes. Only approved, active, unexpired
+-- rows are public. Signed-in users may submit pending rows, but cannot
+-- approve them or edit aggregate validation counters.
 -- ---------------------------------------------------------------------------
 create table if not exists coupons (
   id uuid primary key default gen_random_uuid(),
@@ -117,29 +116,119 @@ create table if not exists coupons (
   description text default '',
   discount_type text check (discount_type in ('percent', 'fixed', 'shipping', 'unknown')) default 'unknown',
   discount_value numeric(10, 2),
+  min_cart numeric(10, 2) not null default 0,
   source_url text default '',
-  submitted_by uuid references auth.users (id),
+  submitted_by uuid default auth.uid() references auth.users (id),
+  review_status text not null default 'pending' check (review_status in ('pending', 'approved', 'rejected')),
+  is_active boolean not null default false,
   success_count integer not null default 0,
   fail_count integer not null default 0,
   last_validated_at timestamptz,
   expires_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint coupons_nonempty_store_code check (length(btrim(store)) > 0 and length(btrim(code)) > 0),
+  constraint coupons_nonnegative_discount check (discount_value is null or discount_value >= 0),
+  constraint coupons_percent_at_most_100 check (discount_type <> 'percent' or discount_value is null or discount_value <= 100),
+  constraint coupons_nonnegative_min_cart check (min_cart >= 0),
+  constraint coupons_nonnegative_counts check (success_count >= 0 and fail_count >= 0),
+  constraint coupons_inactive_until_approved check (review_status = 'approved' or not is_active)
 );
+
+-- Keep existing projects in step with the table definition above.
+alter table coupons
+  add column if not exists min_cart numeric(10, 2) not null default 0,
+  add column if not exists review_status text not null default 'pending',
+  add column if not exists is_active boolean not null default false;
+alter table coupons alter column submitted_by set default auth.uid();
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'coupons_nonempty_store_code') then
+    alter table coupons add constraint coupons_nonempty_store_code
+      check (length(btrim(store)) > 0 and length(btrim(code)) > 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'coupons_nonnegative_discount') then
+    alter table coupons add constraint coupons_nonnegative_discount
+      check (discount_value is null or discount_value >= 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'coupons_percent_at_most_100') then
+    alter table coupons add constraint coupons_percent_at_most_100
+      check (discount_type <> 'percent' or discount_value is null or discount_value <= 100);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'coupons_nonnegative_min_cart') then
+    alter table coupons add constraint coupons_nonnegative_min_cart check (min_cart >= 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'coupons_nonnegative_counts') then
+    alter table coupons add constraint coupons_nonnegative_counts
+      check (success_count >= 0 and fail_count >= 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'coupons_inactive_until_approved') then
+    alter table coupons add constraint coupons_inactive_until_approved
+      check (review_status = 'approved' or not is_active);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'coupons_review_status_check') then
+    alter table coupons add constraint coupons_review_status_check
+      check (review_status in ('pending', 'approved', 'rejected'));
+  end if;
+end;
+$$;
 
 alter table coupons enable row level security;
 
-create policy "coupons are publicly readable" on coupons
-  for select using (true);
+drop policy if exists "coupons are publicly readable" on coupons;
+drop policy if exists "coupons are publicly readable when approved" on coupons;
+create policy "coupons are publicly readable when approved" on coupons
+  for select using (
+    review_status = 'approved'
+    and is_active
+    and (expires_at is null or expires_at > now())
+  );
 
-create policy "coupons are insertable by signed-in users" on coupons
-  for insert with check (auth.uid() is not null);
+drop policy if exists "coupon submitters can read their own submissions" on coupons;
+create policy "coupon submitters can read their own submissions" on coupons
+  for select using (submitted_by = auth.uid());
+
+drop policy if exists "coupons are insertable by signed-in users" on coupons;
+create policy "coupons are insertable as pending submissions" on coupons
+  for insert with check (
+    auth.uid() is not null
+    and submitted_by = auth.uid()
+    and review_status = 'pending'
+    and not is_active
+  );
+
+revoke insert, update, delete on coupons from anon, authenticated;
+grant select on coupons to anon, authenticated;
+grant insert (store, code, description, discount_type, discount_value, min_cart, source_url)
+  on coupons to authenticated;
 
 create index if not exists coupons_store_idx on coupons (store);
+create unique index if not exists coupons_store_code_unique_idx
+  on coupons (lower(btrim(store)), upper(btrim(code)));
+create index if not exists coupons_public_lookup_idx
+  on coupons (store, success_count desc)
+  where review_status = 'approved' and is_active = true;
+
+-- purchases is declared before coupons in this file; add its optional
+-- coupon reference after both tables exist.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'purchases_coupon_id_fkey'
+      and conrelid = 'purchases'::regclass
+  ) then
+    alter table purchases
+      add constraint purchases_coupon_id_fkey
+      foreign key (coupon_id) references coupons (id);
+  end if;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- coupon_validations: a log of "I tried code X at store Y and it did/didn't
--- work," used to keep success_count/fail_count honest over time. Optional --
--- drop this if a simpler approach is preferred.
+-- work." These user-reported results are useful signals, not proof a code
+-- worked; a trusted retailer/affiliate callback would be needed for that.
 -- ---------------------------------------------------------------------------
 create table if not exists coupon_validations (
   id uuid primary key default gen_random_uuid(),
@@ -150,17 +239,74 @@ create table if not exists coupon_validations (
   validated_at timestamptz not null default now()
 );
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'coupon_validations_nonnegative_cart_total'
+      and conrelid = 'coupon_validations'::regclass
+  ) then
+    alter table coupon_validations
+      add constraint coupon_validations_nonnegative_cart_total
+      check (cart_total is null or cart_total >= 0);
+  end if;
+end;
+$$;
+
 alter table coupon_validations enable row level security;
 
-create policy "coupon validations are publicly readable" on coupon_validations
-  for select using (true);
+drop policy if exists "coupon validations are publicly readable" on coupon_validations;
+drop policy if exists "coupon validations are owner-readable" on coupon_validations;
+create policy "coupon validations are owner-readable" on coupon_validations
+  for select using (auth.uid() = user_id);
 
--- Tightened from "any signed-in user" to "only as yourself" -- the new
--- validate_purchase() function below trusts this table to know *whose*
--- validation attempt a row is, so a mismatched or null user_id can't be
--- used to attribute a validation to someone else.
-create policy "coupon validations are insertable by signed-in users" on coupon_validations
-  for insert with check (auth.uid() = user_id);
+drop policy if exists "coupon validations are insertable by signed-in users" on coupon_validations;
+drop policy if exists "coupon validations are insertable by owner for eligible coupon" on coupon_validations;
+create policy "coupon validations are insertable by owner for eligible coupon" on coupon_validations
+  for insert with check (
+    auth.uid() = user_id
+    and cart_total is not null
+    and exists (
+      select 1
+      from coupons c
+      where c.id = coupon_id
+        and c.review_status = 'approved'
+        and c.is_active
+        and (c.expires_at is null or c.expires_at > now())
+        and cart_total >= c.min_cart
+    )
+  );
+
+revoke insert, update, delete on coupon_validations from anon, authenticated;
+grant select on coupon_validations to authenticated;
+grant insert (coupon_id, user_id, worked, cart_total)
+  on coupon_validations to authenticated;
+
+-- Keep the counters server-maintained. The observations are still
+-- client-reported, so they must not be treated as trusted proof.
+create or replace function update_coupon_validation_stats()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update coupons
+    set success_count = success_count + case when new.worked then 1 else 0 end,
+        fail_count = fail_count + case when new.worked then 0 else 1 end,
+        last_validated_at = new.validated_at
+    where id = new.coupon_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists coupon_validations_update_coupon_stats on coupon_validations;
+create trigger coupon_validations_update_coupon_stats
+  after insert on coupon_validations
+  for each row execute function update_coupon_validation_stats();
+
+create index if not exists coupon_validations_owner_coupon_idx
+  on coupon_validations (user_id, coupon_id, validated_at desc);
 
 -- ---------------------------------------------------------------------------
 -- acorn_ledger: append-only log of acorn grants (and, later, redemption
@@ -321,12 +467,28 @@ begin
   v_acorns := 0;
 
   if v_purchase.coupon_id is not null then
-    select * into v_coupon from coupons where id = v_purchase.coupon_id;
+    select * into v_coupon from coupons
+      where id = v_purchase.coupon_id
+        and review_status = 'approved'
+        and is_active
+        and (expires_at is null or expires_at > now());
+
+    if not found then
+      update purchases set status = 'rejected', validated_at = now()
+        where id = p_purchase_id;
+
+      return query
+        select 'rejected'::text, 0, cs.total_saved, cs.xp, cs.acorn_balance
+        from character_stats cs where cs.user_id = v_purchase.user_id;
+      return;
+    end if;
 
     select * into v_validation from coupon_validations
       where coupon_id = v_purchase.coupon_id
         and user_id = v_purchase.user_id
         and worked = true
+        and cart_total is not null
+        and cart_total >= v_coupon.min_cart
       order by validated_at desc
       limit 1;
 
@@ -348,9 +510,9 @@ begin
     elsif v_coupon.discount_type in ('fixed', 'shipping') and v_coupon.discount_value is not null then
       v_cap := v_coupon.discount_value;
     else
-      -- Unknown discount shape or missing cart_total: nothing better to
-      -- check against, so fall back to the self-reported number.
-      v_cap := v_awarded_savings;
+      -- Unknown discount shape or missing evidence: do not use the
+      -- client's claimed savings as a reward cap.
+      v_cap := 0;
     end if;
 
     v_awarded_savings := least(v_awarded_savings, v_cap);
