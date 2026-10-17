@@ -14,8 +14,38 @@ import {
   daysUntilDeadline,
 } from '../lib/purchases.js';
 import { xpFromStats, computeLevel } from '../lib/character.js';
+import { resolveStoreFromUrl } from '../lib/store-matcher.js';
 
 const ALARM_NAME = 'check-returns';
+
+// In-memory tab state repository: tabId -> { tabId, url, store, resolvedAt } (Honey d.get(tabId))
+const tabStoreCache = new Map();
+
+export async function getStoreByTabId(tabId) {
+  if (tabStoreCache.has(tabId)) {
+    return tabStoreCache.get(tabId);
+  }
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab?.url) {
+      return resolveAndCacheTab(tabId, tab.url);
+    }
+  } catch {
+    // Tab may have closed or unavailable
+  }
+  return null;
+}
+
+function resolveAndCacheTab(tabId, url) {
+  if (!url || url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')) {
+    tabStoreCache.delete(tabId);
+    return null;
+  }
+  const resolved = resolveStoreFromUrl(url);
+  const entry = { tabId, url, store: resolved, resolvedAt: Date.now() };
+  tabStoreCache.set(tabId, entry);
+  return entry;
+}
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason === 'install') {
@@ -33,6 +63,26 @@ chrome.runtime.onStartup.addListener(async () => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) checkReturns();
+});
+
+// Honey Lifecycle Step 1: Tab Navigation & Activation Tracking
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  const url = changeInfo.url || tab?.url;
+  if (url) {
+    resolveAndCacheTab(tabId, url);
+    if (tab?.active) {
+      await updateBadge();
+    }
+  }
+});
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  await getStoreByTabId(activeInfo.tabId);
+  await updateBadge();
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabStoreCache.delete(tabId);
 });
 
 // Central message router. Returning true keeps the channel open for the
@@ -99,6 +149,20 @@ async function handleMessage({ type, payload }) {
       await updateBadge();
       return { ok: true, ...(await buildState()) };
 
+    case MSG.RESOLVE_STORE: {
+      const { url, tabId } = payload || {};
+      const resolved = resolveStoreFromUrl(url);
+      if (tabId && resolved) {
+        tabStoreCache.set(tabId, { tabId, url, store: resolved, resolvedAt: Date.now() });
+      }
+      return { ok: true, store: resolved };
+    }
+
+    case MSG.GET_TAB_STORE: {
+      const entry = await getStoreByTabId(payload?.tabId);
+      return { ok: true, entry };
+    }
+
     default:
       return { ok: false, error: `unknown message type: ${type}` };
   }
@@ -112,27 +176,41 @@ async function buildState() {
 }
 
 // Badge priority: pending detections (need a human glance) outrank return
-// deadlines, which outrank nothing. Pending = blue, missed = red, due soon
-// = amber.
+// deadlines, which outrank recognized coupon store indicator, which outrank nothing.
+// Pending = blue, missed = red, due soon = amber, recognized store = green.
 async function updateBadge() {
   const settings = await getSettings();
   const [purchases, pending] = await Promise.all([getPurchases(), getPending()]);
   const { dueSoon, missedReturns } = getStats(purchases, { notifyDaysBefore: settings.notifyDaysBefore });
 
-  let count = 0;
+  let text = '';
   let color = '#22c55e';
   if (pending.length > 0) {
-    count = pending.length;
+    text = String(pending.length);
     color = '#3b82f6';
   } else if (missedReturns > 0) {
-    count = missedReturns;
+    text = String(missedReturns);
     color = '#dc2626';
   } else if (dueSoon.length > 0) {
-    count = dueSoon.length;
+    text = String(dueSoon.length);
     color = '#f59e0b';
+  } else {
+    // Check if active tab is on a supported/recognized shopping store
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (activeTab?.id) {
+        const tabEntry = await getStoreByTabId(activeTab.id);
+        if (tabEntry?.store?.found) {
+          text = '✓';
+          color = '#10b981';
+        }
+      }
+    } catch {
+      // Tab query might fail if window closed or worker unready
+    }
   }
 
-  await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
+  await chrome.action.setBadgeText({ text });
   await chrome.action.setBadgeBackgroundColor({ color });
 }
 

@@ -23,6 +23,7 @@ const els = {
   findCoupons: $('find-coupons'),
   couponList: $('coupon-list'),
   couponEmpty: $('coupon-empty'),
+  detectedStore: $('detected-store'),
   toggleManual: $('toggle-manual'),
   form: $('manual-form'),
   title: $('f-title'),
@@ -52,6 +53,9 @@ async function init() {
   els.form.addEventListener('submit', onManualSubmit);
   els.scanPage.addEventListener('click', onScanPage);
   els.findCoupons.addEventListener('click', onFindCoupons);
+
+  // Honey Lifecycle: Automatically resolve current tab store & populate coupons
+  await autoDetectStore();
 }
 
 function render(state) {
@@ -229,9 +233,36 @@ function scanPageForProduct() {
   };
 }
 
-// Savings-maximization entry point (owned by <you> + Rohit): detect whether
-// this page has a coupon field at all (informational for now), then look up
-// candidate codes for the site via src/lib/coupons.js.
+async function autoDetectStore() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) return;
+
+    const res = await sendToBackground(MSG.RESOLVE_STORE, { url: tab.url, tabId: tab.id });
+    const store = res?.store;
+
+    if (store) {
+      els.detectedStore.textContent = store.found ? `${store.name} (${store.domain})` : store.domain;
+      els.detectedStore.hidden = false;
+
+      if (!els.store.value && store.domain) {
+        els.store.value = store.domain;
+      }
+
+      // Preload available coupons for the detected store
+      const coupons = await searchCoupons({ store: store.domain, url: tab.url });
+      renderCoupons(coupons);
+      if (coupons.length > 0) {
+        setStatus(`Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'} for ${store.name || store.domain}.`);
+      }
+    }
+  } catch {
+    // Tab querying may not be available on system pages
+  }
+}
+
+// Savings-maximization entry point: detect whether
+// this page has a coupon field and fetch candidate codes via Honey store resolution.
 async function onFindCoupons() {
   setStatus('Looking for coupons…');
   els.findCoupons.disabled = true;
@@ -239,15 +270,35 @@ async function onFindCoupons() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('no active tab');
 
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['src/content/coupon-finder.js'],
-    });
+    let pageResult = null;
+    try {
+      const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['src/content/coupon-finder.js'],
+      });
+      pageResult = result;
+    } catch {
+      // Content script injection might fail on restricted domains (e.g. Chrome Web Store)
+    }
 
-    const store = result?.store || new URL(tab.url).hostname.replace(/^www\./, '');
-    const coupons = await searchCoupons({ store, url: tab.url });
+    const res = await sendToBackground(MSG.RESOLVE_STORE, { url: tab.url, tabId: tab.id });
+    const resolvedStore = res?.store;
+    const storeDomain = resolvedStore?.domain || pageResult?.store || new URL(tab.url).hostname.replace(/^www\./, '');
+
+    if (resolvedStore) {
+      els.detectedStore.textContent = resolvedStore.found ? `${resolvedStore.name} (${resolvedStore.domain})` : resolvedStore.domain;
+      els.detectedStore.hidden = false;
+    }
+
+    const coupons = await searchCoupons({ store: storeDomain, url: tab.url });
     renderCoupons(coupons);
-    setStatus(coupons.length ? `Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'}.` : 'No coupons found for this site.');
+
+    const storeTitle = resolvedStore?.name || storeDomain;
+    if (pageResult?.found) {
+      setStatus(`Promo field detected! ${coupons.length ? `Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'} for ${storeTitle}.` : `No coupons found for ${storeTitle}.`}`);
+    } else {
+      setStatus(coupons.length ? `Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'} for ${storeTitle}.` : `No coupons found for ${storeTitle}.`);
+    }
   } catch {
     setStatus("Can't check this page for coupons.");
   } finally {

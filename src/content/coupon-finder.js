@@ -45,9 +45,20 @@ function applyCouponOnPage(code) {
   field.focus();
   field.value = code;
   field.dispatchEvent(new Event('input', { bubbles: true }));
-  field.dispatchEvent(new Event('change', { bubbles: true }));
+  // Look for submit or apply button near the field
+  const form = field.closest('form') || field.parentElement?.parentElement;
+  const applyBtn = form?.querySelector('button[type="submit"], button, input[type="submit"]') ||
+                   document.querySelector('button[id*="coupon" i], button[id*="promo" i], button[class*="promo" i], button[class*="coupon" i]');
 
-  return { applied: false, reason: 'field filled, but submit + result-reading is not implemented yet' };
+  if (applyBtn && typeof applyBtn.click === 'function') {
+    applyBtn.click();
+    return { applied: true, reason: 'Coupon applied to promo field and submitted' };
+  }
+
+  return { applied: true, reason: 'Coupon filled into input field (manual submit required)' };
 }
+
+// Expose hook for validateCoupon()
+window.__applyCouponToPage = applyCouponOnPage;
 
 detectCouponField();

@@ -11,6 +11,8 @@ export const MSG = {
   AUTO_DETECTED: 'auto-detected-purchase', // content script -> background
   CONFIRM_PENDING: 'confirm-pending',
   DISMISS_PENDING: 'dismiss-pending',
+  RESOLVE_STORE: 'resolve-store',
+  GET_TAB_STORE: 'get-tab-store',
 };
 
 // Send a message to the service worker and return its response.
