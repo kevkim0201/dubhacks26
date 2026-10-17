@@ -5,3 +5,5 @@ dist/
 .env
 .env.local
 src/lib/supabaseConfig.js
+__pycache__/
+*.pyc
