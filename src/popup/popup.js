@@ -308,14 +308,16 @@ async function onOpenCoupons() {
     if (!tab?.id || !tab.url) throw new Error('no active tab');
 
     let pageResult = null;
-    try {
-      const [{ result }] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['src/content/coupon-finder.js'],
-      });
-      pageResult = result;
-    } catch {
-      // Content script injection might fail on restricted domains (e.g. Chrome Web Store)
+    if (tab.url.startsWith('http://') || tab.url.startsWith('https://')) {
+      try {
+        const [{ result }] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['src/content/coupon-finder.js'],
+        });
+        pageResult = result;
+      } catch {
+        // Content script injection might fail on restricted domains (e.g. Chrome Web Store)
+      }
     }
 
     const res = await sendToBackground(MSG.RESOLVE_STORE, { url: tab.url, tabId: tab.id });
