@@ -167,19 +167,23 @@ function acornTargetPosition(index) {
   );
 }
 
-function addAcorn() {
+// `instant`: skip the fall-in animation and the hop -- used once, on page
+// load, to silently rebuild whatever pile the player already banked
+// (see "persistent acorn tokens" below). Real new acorns (from a
+// purchase event) always fall in and trigger a hop.
+function addAcorn(instant = false) {
   if (acorns.length >= MAX_ACORNS) return;
   const index = acorns.length;
   const target = acornTargetPosition(index);
   acorns.push({
     target,
-    y: target.y + 1.6, // starts above the pile and falls in
+    y: instant ? target.y : target.y + 1.6,
     rotY: Math.random() * Math.PI * 2,
-    settled: false,
+    settled: instant,
   });
   bodyMesh.count = acorns.length;
   capMesh.count = acorns.length;
-  triggerHop();
+  if (!instant) triggerHop();
 }
 
 function updateAcornInstances(dt) {
@@ -239,29 +243,108 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 
-// ======================== demo controls ========================
-// Maps straight to the plan's rule: "one acorn per $5 saved."
-const DOLLARS_PER_ACORN = 5;
-let savedTotal = 0;
-const savedLabel = document.getElementById('saved-label');
+// ======================== persistent acorn tokens ========================
+// Acorns are an earned, saved token -- not a thing the player spawns by
+// clicking. They accrue from XP (same XP a real purchase would grant,
+// src/lib/character.js's $1 saved = 10 XP) and persist across reloads via
+// localStorage, standing in for chrome.storage.local until this moves
+// into the extension. 1 acorn per $5 saved, expressed in XP so the rule
+// lines up with the rest of the app: 50 XP per acorn.
+const STORAGE_KEY = 'squirrelPrototypeState';
+const XP_PER_DOLLAR = 10;
+const XP_PER_ACORN = 50;
 
-function syncAcornsToSavings() {
-  const targetCount = Math.floor(savedTotal / DOLLARS_PER_ACORN);
-  while (acorns.length < targetCount) addAcorn();
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return { totalXP: parsed?.totalXP ?? 0 };
+  } catch {
+    return { totalXP: 0 };
+  }
 }
 
-document.getElementById('add-savings').addEventListener('click', () => {
-  savedTotal += 5;
-  savedLabel.textContent = savedTotal;
-  syncAcornsToSavings();
-});
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+  } catch {
+    // Storage can fail (private browsing, quota) -- the session still
+    // works, it just won't remember the pile on next load.
+  }
+}
+
+let appState = loadState();
+
+const tokenLabel = document.getElementById('token-count');
+function updateTokenLabel() {
+  tokenLabel.textContent = Math.floor(appState.totalXP / XP_PER_ACORN);
+}
+
+function syncAcornsToXP(instant = false) {
+  const targetCount = Math.min(MAX_ACORNS, Math.floor(appState.totalXP / XP_PER_ACORN));
+  while (acorns.length < targetCount) addAcorn(instant);
+}
+
+// Rebuild whatever was already banked, with no fall-in/hop -- this is a
+// reload, not a new purchase.
+syncAcornsToXP(true);
+updateTokenLabel();
+
+// ======================== purchase events ========================
+// This is the integration seam: once this scene lives in the extension,
+// call handlePurchaseEvent() from a chrome.storage.onChanged listener on
+// the `purchases` key (src/lib/purchases.js) instead of
+// simulatePurchase()'s random generator -- the event shape is the same
+// either way, so nothing else in this file needs to change.
+const STORE_NAMES = ['Nike', 'Target', 'Sephora', 'Everlane', 'Amazon', 'REI'];
+const feedList = document.getElementById('feed-list');
+
+function simulatePurchase() {
+  const store = STORE_NAMES[Math.floor(Math.random() * STORE_NAMES.length)];
+  const savings = Math.round((3 + Math.random() * 27) * 100) / 100;
+  handlePurchaseEvent({ store, savings });
+}
+
+function handlePurchaseEvent({ store, savings }) {
+  const xpGained = Math.round(savings * XP_PER_DOLLAR);
+  const acornsBefore = Math.floor(appState.totalXP / XP_PER_ACORN);
+
+  appState.totalXP += xpGained;
+  saveState();
+
+  const acornsAfter = Math.floor(appState.totalXP / XP_PER_ACORN);
+  syncAcornsToXP(false);
+  updateTokenLabel();
+  logEvent({ store, savings, xpGained, acornsGained: acornsAfter - acornsBefore });
+}
+
+function logEvent({ store, savings, xpGained, acornsGained }) {
+  const li = document.createElement('li');
+  const acornNote = acornsGained > 0 ? ` → +${acornsGained} acorn${acornsGained === 1 ? '' : 's'}` : '';
+  li.textContent = `Saved $${savings.toFixed(2)} at ${store} → +${xpGained} XP${acornNote}`;
+  feedList.prepend(li);
+  while (feedList.children.length > 5) feedList.lastChild.remove();
+}
+
+document.getElementById('simulate-purchase').addEventListener('click', simulatePurchase);
+
+let autoTimer = null;
+const autoToggle = document.getElementById('auto-toggle');
+function setAuto(enabled) {
+  clearInterval(autoTimer);
+  if (enabled) autoTimer = setInterval(simulatePurchase, 5000);
+}
+autoToggle.addEventListener('change', () => setAuto(autoToggle.checked));
+setAuto(autoToggle.checked); // on by default -- acorns drop with no interaction at all
 
 document.getElementById('reset').addEventListener('click', () => {
-  savedTotal = 0;
-  savedLabel.textContent = '0';
+  appState = { totalXP: 0 };
+  saveState();
+  updateTokenLabel();
   acorns.length = 0;
   bodyMesh.count = 0;
   capMesh.count = 0;
+  feedList.innerHTML = '';
 });
 
 // ======================== swapping in a real model later ========================
