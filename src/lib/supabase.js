@@ -6,7 +6,16 @@
 // handful of operations this extension needs; reach for the real SDK
 // instead if the project later adds a build step and needs realtime
 // subscriptions, storage, etc.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseConfig.js';
+let SUPABASE_URL = '';
+let SUPABASE_ANON_KEY = '';
+
+try {
+  const config = await import('./supabaseConfig.js');
+  SUPABASE_URL = config.SUPABASE_URL || '';
+  SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY || '';
+} catch {
+  // Config file not created yet; assertConfigured will provide friendly guidance
+}
 
 const SESSION_KEY = 'supabaseSession'; // chrome.storage.local -- access/refresh tokens
 

@@ -1,20 +1,20 @@
 // Pip -- the character that grows as you save. Procedurally drawn (no image
 // assets), so it themes instantly from the user's skin/leaf/flower colors.
-// renderCharacterSVG() returns the full scene: backdrop circle, Pip, and a
-// few decorative sparkles that increase with tier.
+// renderCharacterSVG() returns the full scene: backdrop circle (optionally
+// ringed with a radial progress indicator), Pip, and a few decorative
+// sparkles that increase with tier.
 import { shade } from './color.js';
 
 // Tier thresholds are defined in dollars saved -- the rule shown to the
-// user is literal: "$1 saved after checkout = 10 XP." XP is derived from
-// the dollar thresholds, never the other way around, so the two numbers
-// never drift apart.
+// user is literal: "$1 saved after a completed purchase = 10 XP." XP is
+// derived from the dollar thresholds, never the other way around, so the
+// two numbers never drift apart. Four tiers total -- Flourish is the max;
+// there's no tier beyond it.
 export const STAGES = [
-  { key: 'seed', label: 'Seed', minSaved: 0 },
-  { key: 'sprout', label: 'Sprout', minSaved: 25 },
-  { key: 'bloom', label: 'Bloom', minSaved: 250 },
-  { key: 'grove', label: 'Grove', minSaved: 750 },
-  { key: 'orchard', label: 'Orchard', minSaved: 2000 },
-  { key: 'evergreen', label: 'Evergreen', minSaved: 5000 },
+  { key: 'seed', label: 'Seed', minSaved: 0, tagline: 'Where it all began' },
+  { key: 'sprout', label: 'Sprout', minSaved: 50, tagline: 'A little more life' },
+  { key: 'bloom', label: 'Bloom', minSaved: 250, tagline: 'A new little bloom' },
+  { key: 'flourish', label: 'Flourish', minSaved: 500, tagline: 'Room to flourish' },
 ].map((s) => ({ ...s, minXp: s.minSaved * 10 }));
 
 export const XP_PER_DOLLAR = 10;
@@ -30,9 +30,10 @@ export function computeLevel(xp) {
   }
   const stage = STAGES[index];
   const next = STAGES[index + 1] ?? null;
-  const xpIntoStage = xp - stage.minXp;
-  const xpForNextStage = next ? next.minXp - stage.minXp : null;
-  const progress = next ? Math.min(1, xpIntoStage / xpForNextStage) : 1;
+  // Progress is against the NEXT tier's absolute threshold (not relative
+  // to the current tier's own floor) -- e.g. 1,284/2,500 XP reads as 51%,
+  // matching the number shown right next to the bar in the dashboard.
+  const progress = next ? Math.min(1, xp / next.minXp) : 1;
   const dollarsToNext = next ? Math.max(0, next.minSaved - xp / XP_PER_DOLLAR) : 0;
 
   return {
@@ -41,9 +42,8 @@ export function computeLevel(xp) {
     stage,
     stageIndex: index,
     next,
-    xpIntoStage,
-    xpForNextStage,
     progress, // 0..1, always 1 once maxed out
+    progressPct: Math.round(progress * 100),
     dollarsToNext,
   };
 }
@@ -55,10 +55,8 @@ export function computeLevel(xp) {
 const VISUALS = [
   { bodyScale: 0.5, limbs: false, asleep: true, leaves: false, flowers: 0, sparkles: 0 },  // seed
   { bodyScale: 0.78, limbs: true, asleep: false, leaves: true, leafScale: 0.85, flowers: 0, sparkles: 0 }, // sprout
-  { bodyScale: 0.88, limbs: true, asleep: false, leaves: true, leafScale: 1.0, flowers: 1, sparkles: 1 },  // bloom
-  { bodyScale: 0.97, limbs: true, asleep: false, leaves: true, leafScale: 1.08, flowers: 2, sparkles: 2 }, // grove
-  { bodyScale: 1.05, limbs: true, asleep: false, leaves: true, leafScale: 1.15, flowers: 3, sparkles: 2 }, // orchard
-  { bodyScale: 1.15, limbs: true, asleep: false, leaves: true, leafScale: 1.25, flowers: 4, sparkles: 3 }, // evergreen
+  { bodyScale: 0.97, limbs: true, asleep: false, leaves: true, leafScale: 1.08, flowers: 2, sparkles: 1 }, // bloom
+  { bodyScale: 1.15, limbs: true, asleep: false, leaves: true, leafScale: 1.25, flowers: 4, sparkles: 3 }, // flourish
 ];
 
 function leafPath(side, scale, color) {
@@ -76,12 +74,24 @@ function sparkle(cx, cy, r, color, opacity = 1) {
                 fill="${color}" opacity="${opacity}" />`;
 }
 
+/**
+ * @param {string} stageKey one of STAGES[].key
+ * @param {object} [opts]
+ * @param {string} [opts.skinColor]
+ * @param {string} [opts.leafColor]
+ * @param {string} [opts.flowerColor]
+ * @param {number} [opts.size] rendered pixel size (viewBox is always 200x200)
+ * @param {number} [opts.progress] 0..1 -- when given, draws a radial progress
+ *   ring around the backdrop (the dashboard's big "companion" card); omit
+ *   it for a plain backdrop circle (small icons elsewhere in the UI).
+ */
 export function renderCharacterSVG(stageKey, opts = {}) {
   const {
     skinColor = '#f3bd93',
     leafColor = '#2f6b4f',
     flowerColor = '#f472b6',
     size = 160,
+    progress = null,
   } = opts;
 
   const index = Math.max(0, STAGES.findIndex((s) => s.key === stageKey));
@@ -97,6 +107,20 @@ export function renderCharacterSVG(stageKey, opts = {}) {
 
   // Soft circular backdrop.
   parts.push(`<circle cx="100" cy="100" r="90" fill="${backdrop}" />`);
+
+  // Optional radial progress ring -- drawn via stroke-dasharray on a
+  // circle slightly outside the backdrop, starting at 12 o'clock.
+  if (progress != null) {
+    const r = 95;
+    const circumference = 2 * Math.PI * r;
+    const dash = Math.max(0, Math.min(1, progress)) * circumference;
+    parts.push(`
+      <circle cx="100" cy="100" r="${r}" fill="none" stroke="${shade(leafColor, 0.7)}" stroke-width="6" />
+      <circle cx="100" cy="100" r="${r}" fill="none" stroke="${leafColor}" stroke-width="6" stroke-linecap="round"
+              stroke-dasharray="${dash.toFixed(1)} ${circumference.toFixed(1)}"
+              transform="rotate(-90 100 100)" />
+    `);
+  }
 
   // Decorative sparkles, outside Pip so they don't scale with tier -- they
   // just appear in greater number at higher tiers.

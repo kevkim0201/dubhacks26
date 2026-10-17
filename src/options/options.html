@@ -6,140 +6,270 @@
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
-    <div class="wrap">
-      <header class="topbar">
-        <div class="brand">
-          <svg class="brand__mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
-            <rect x="2" y="2" width="28" height="28" rx="8" fill="#2f6b4f" />
-            <path d="M9 14 Q16 22 23 14" stroke="#fdfaf4" stroke-width="3.2" fill="none" stroke-linecap="round" />
+    <header class="app-nav">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+          <rect x="2" y="2" width="28" height="28" rx="8" fill="#2f6b4f" />
+          <path d="M9 14 Q16 22 23 14" stroke="#fdfaf4" stroke-width="3.2" fill="none" stroke-linecap="round" />
+        </svg>
+        <span class="brand__name">pocket</span>
+      </div>
+      <nav class="app-tabs" id="app-tabs">
+        <button type="button" class="app-tab active" data-tab="overview">Overview</button>
+        <button type="button" class="app-tab" data-tab="activity">Savings activity</button>
+        <button type="button" class="app-tab" data-tab="how">How it works</button>
+      </nav>
+      <div class="nav-right">
+        <span class="status-pill"><span class="status-dot"></span> Pocket is active</span>
+        <button type="button" class="avatar-btn" id="avatar-btn" aria-label="Account">
+          <span id="avatar-letter">A</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <span class="brand__name">pocket</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- ======================== Overview ======================== -->
+      <div id="tab-overview" class="tab-panel">
+        <div class="dash-head">
+          <div>
+            <h1 id="dash-title">A little saved. A little grown.</h1>
+            <p id="dash-subtitle">Welcome back. Here&rsquo;s what you and Pip have been growing.</p>
+          </div>
+          <p class="dash-head__date" id="dash-date">Your journey</p>
         </div>
-      </header>
 
-      <section class="panel panel--wide" id="pending-panel" hidden>
-        <h2>Review detected purchases</h2>
-        <div id="pending-list" class="pending-grid"></div>
-      </section>
+        <div class="dash-grid">
+          <section class="companion-card">
+            <div class="companion-card__head">
+              <h2>Your little savings companion</h2>
+              <span class="tier-pill" id="companion-tier-pill">
+                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M12 3c-3 3-5 6-5 9a5 5 0 0 0 10 0c0-3-2-6-5-9Z" fill="currentColor" /></svg>
+                <span id="companion-tier-label">Tier 1 &middot; Seed</span>
+              </span>
+            </div>
 
-      <header class="hero">
-        <div id="character-art" class="character-art"></div>
-        <div class="hero__meta">
-          <input type="text" id="character-name" class="character-name-input" />
-          <p class="character-stage" id="character-stage">Tier 1 &middot; Seed</p>
-          <div class="xp-bar"><div class="xp-bar__fill" id="xp-fill"></div></div>
-          <p class="xp-label" id="xp-label">0 XP</p>
+            <div class="xp-toast" id="xp-toast" hidden>
+              <p class="xp-toast__amount"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M12 2a6 6 0 0 0-3 11.2V15a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1.8A6 6 0 0 0 12 2Z" fill="currentColor" /></svg> <span id="xp-toast-amount">+0 XP</span></p>
+              <p class="xp-toast__desc" id="xp-toast-desc"></p>
+              <p class="xp-toast__meta" id="xp-toast-meta"></p>
+            </div>
+
+            <div class="companion-stage">
+              <div class="ring-wrap">
+                <div id="companion-art" class="companion-art"></div>
+              </div>
+              <div class="next-evolution" id="next-evolution">
+                <p class="next-evolution__label">Next evolution</p>
+                <div class="next-evolution__art" id="next-evolution-art"></div>
+                <p class="next-evolution__name" id="next-evolution-name">&#128274; Bloom</p>
+                <p class="next-evolution__req" id="next-evolution-req">At $250 saved</p>
+              </div>
+            </div>
+
+            <p class="companion-caption" id="companion-caption">Pip's growing, thanks to your savings.</p>
+
+            <div class="progress-card">
+              <div class="progress-card__head">
+                <span id="progress-next-label">Next up: Bloom</span>
+                <span class="progress-card__xp" id="progress-xp">0 / 500 XP &middot; 0%</span>
+              </div>
+              <div class="xp-bar"><div class="xp-bar__fill" id="xp-fill"></div></div>
+              <div class="progress-card__foot">
+                <span id="progress-note"></span>
+                <span id="progress-fraction"></span>
+              </div>
+              <p class="progress-card__note">$1 saved after a completed purchase = 10 XP. Not money spent.</p>
+            </div>
+          </section>
+
+          <aside class="side-col">
+            <div class="stat-card">
+              <div class="stat-card__head">
+                <span>Total saved</span>
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
+              </div>
+              <p class="stat-card__amount" id="side-total-saved">$0</p>
+              <div class="stat-card__foot">
+                <span>Money kept &middot; this month</span>
+                <span class="accent" id="side-this-month">+$0</span>
+              </div>
+            </div>
+
+            <div class="recent-card">
+              <div class="recent-card__head">
+                <h3>Recent savings</h3>
+                <button type="button" class="link-btn" id="view-all-link">View all &rarr;</button>
+              </div>
+              <ul class="recent-list" id="recent-list"></ul>
+              <p class="recent-empty" id="recent-empty" hidden>Nothing logged yet.</p>
+
+              <div id="coupon-teaser" class="coupon-teaser" hidden>
+                <div class="coupon-teaser__head">
+                  <span id="coupon-teaser-store"></span>
+                  <span class="pill">Not applied yet</span>
+                </div>
+                <p class="coupon-teaser__amount">You could save <span id="coupon-teaser-amount">$0</span></p>
+                <p class="coupon-teaser__note">Not in your total or XP. Growth is earned only after a completed purchase.</p>
+              </div>
+            </div>
+          </aside>
         </div>
-      </header>
 
-      <section class="stats">
-        <div class="stat"><p class="stat__value" id="stat-saved">$0</p><p class="stat__label">Total saved</p></div>
-        <div class="stat"><p class="stat__value" id="stat-month">$0</p><p class="stat__label">This month</p></div>
-        <div class="stat"><p class="stat__value" id="stat-items">0</p><p class="stat__label">Items tracked</p></div>
-        <div class="stat"><p class="stat__value" id="stat-returns">0</p><p class="stat__label">Returns completed</p></div>
-        <div class="stat"><p class="stat__value" id="stat-missed">0</p><p class="stat__label">Missed returns</p></div>
-      </section>
-
-      <div class="columns">
-        <section class="panel">
-          <h2>Add a purchase manually</h2>
-          <p class="hint">Purchases are detected automatically as you check out. Use this for in-store buys, gifts, or anything the detector missed.</p>
-          <form id="add-form">
-            <div class="field">
-              <label for="f-title">What did you buy?</label>
-              <input type="text" id="f-title" required />
+        <section class="chapters-card">
+          <div class="chapters-head">
+            <div>
+              <h2>Small savings. New chapters.</h2>
+              <span class="muted">Every milestone is money you've kept.</span>
             </div>
-            <div class="field-row">
-              <div class="field">
-                <label for="f-store">Store</label>
-                <input type="text" id="f-store" />
-              </div>
-              <div class="field">
-                <label for="f-date">Purchase date</label>
-                <input type="date" id="f-date" />
-              </div>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label for="f-price">Price paid</label>
-                <input type="number" id="f-price" min="0" step="0.01" required />
-              </div>
-              <div class="field">
-                <label for="f-savings">Amount saved</label>
-                <input type="number" id="f-savings" min="0" step="0.01" />
-              </div>
-            </div>
-            <div class="field">
-              <label for="f-deadline">Return by (optional)</label>
-              <input type="date" id="f-deadline" />
-              <button type="button" id="use-default-window" class="link-btn">Use default window</button>
-            </div>
-            <button type="submit" class="primary">Add purchase</button>
-          </form>
+            <span class="muted" id="chapters-count">0 of 4 chapters unlocked</span>
+          </div>
+          <div class="chapters-grid" id="chapters-grid"></div>
         </section>
 
-        <section class="panel">
-          <h2>Settings</h2>
-          <form id="settings-form">
-            <label class="toggle-row">
-              <span>Detect purchases automatically</span>
-              <input type="checkbox" id="s-auto-detect" />
-            </label>
-            <div class="field">
-              <label for="s-skin">Pip's color</label>
-              <input type="color" id="s-skin" />
+        <footer class="dash-footer">
+          <span>No streaks. No shopping quests. No need to spend more. Savings set the pace.</span>
+          <button type="button" class="link-btn" id="how-it-works-link">How Pip grows &rarr;</button>
+        </footer>
+      </div>
+
+      <!-- ======================== Savings activity ======================== -->
+      <div id="tab-activity" class="tab-panel" hidden>
+        <section class="panel panel--wide" id="pending-panel" hidden>
+          <h2>Review detected purchases</h2>
+          <div id="pending-list" class="pending-grid"></div>
+        </section>
+
+        <div class="columns">
+          <section class="panel">
+            <h2>Add a purchase manually</h2>
+            <p class="hint">Purchases are detected automatically as you check out. Use this for in-store buys, gifts, or anything the detector missed.</p>
+            <form id="add-form">
+              <div class="field">
+                <label for="f-title">What did you buy?</label>
+                <input type="text" id="f-title" required />
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="f-store">Store</label>
+                  <input type="text" id="f-store" />
+                </div>
+                <div class="field">
+                  <label for="f-date">Purchase date</label>
+                  <input type="date" id="f-date" />
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="f-price">Price paid</label>
+                  <input type="number" id="f-price" min="0" step="0.01" required />
+                </div>
+                <div class="field">
+                  <label for="f-savings">Amount saved</label>
+                  <input type="number" id="f-savings" min="0" step="0.01" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="f-deadline">Return by (optional)</label>
+                <input type="date" id="f-deadline" />
+                <button type="button" id="use-default-window" class="link-btn">Use default window</button>
+              </div>
+              <button type="submit" class="primary">Add purchase</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <h2>Settings</h2>
+            <form id="settings-form">
+              <div class="field">
+                <label for="s-name">Your name</label>
+                <input type="text" id="s-name" placeholder="Alex" />
+              </div>
+              <div class="field">
+                <label for="s-character-name">Character name</label>
+                <input type="text" id="s-character-name" />
+              </div>
+              <label class="toggle-row">
+                <span>Detect purchases automatically</span>
+                <input type="checkbox" id="s-auto-detect" />
+              </label>
+              <div class="field">
+                <label for="s-skin">Pip's color</label>
+                <input type="color" id="s-skin" />
+              </div>
+              <div class="field">
+                <label for="s-leaf">Leaf color</label>
+                <input type="color" id="s-leaf" />
+              </div>
+              <div class="field">
+                <label for="s-flower">Flower color</label>
+                <input type="color" id="s-flower" />
+              </div>
+              <div class="field">
+                <label for="s-notify">Notify this many days before a return is due</label>
+                <input type="number" id="s-notify" min="0" max="30" />
+              </div>
+              <div class="field">
+                <label for="s-window">Default return window (days)</label>
+                <input type="number" id="s-window" min="0" max="365" />
+              </div>
+            </form>
+            <p class="status" id="settings-status" role="status"></p>
+          </section>
+        </div>
+
+        <section class="panel panel--wide">
+          <div class="panel__head">
+            <h2>Purchases</h2>
+            <div class="filter-tabs" id="filter-tabs">
+              <button type="button" class="filter-tab active" data-filter="all">All</button>
+              <button type="button" class="filter-tab" data-filter="tracked">Tracked</button>
+              <button type="button" class="filter-tab" data-filter="returned">Returned</button>
+              <button type="button" class="filter-tab" data-filter="missed">Missed</button>
             </div>
-            <div class="field">
-              <label for="s-leaf">Leaf color</label>
-              <input type="color" id="s-leaf" />
-            </div>
-            <div class="field">
-              <label for="s-flower">Flower color</label>
-              <input type="color" id="s-flower" />
-            </div>
-            <div class="field">
-              <label for="s-notify">Notify this many days before a return is due</label>
-              <input type="number" id="s-notify" min="0" max="30" />
-            </div>
-            <div class="field">
-              <label for="s-window">Default return window (days)</label>
-              <input type="number" id="s-window" min="0" max="365" />
-            </div>
-          </form>
-          <p class="status" id="settings-status" role="status"></p>
+          </div>
+          <div class="table-wrap">
+            <table id="purchases-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Store</th>
+                  <th>Paid</th>
+                  <th>Saved</th>
+                  <th>Return by</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="purchases-body"></tbody>
+            </table>
+            <p class="empty" id="empty-state" hidden>Nothing here yet &mdash; Pocket will log purchases as it detects them.</p>
+          </div>
         </section>
       </div>
 
-      <section class="panel panel--wide">
-        <div class="panel__head">
-          <h2>Purchases</h2>
-          <div class="filter-tabs" id="filter-tabs">
-            <button type="button" class="filter-tab active" data-filter="all">All</button>
-            <button type="button" class="filter-tab" data-filter="tracked">Tracked</button>
-            <button type="button" class="filter-tab" data-filter="returned">Returned</button>
-            <button type="button" class="filter-tab" data-filter="missed">Missed</button>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table id="purchases-table">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Store</th>
-                <th>Paid</th>
-                <th>Saved</th>
-                <th>Return by</th>
-                <th>Source</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="purchases-body"></tbody>
-          </table>
-          <p class="empty" id="empty-state" hidden>Nothing here yet &mdash; Pocket will log purchases as it detects them.</p>
-        </div>
-      </section>
-    </div>
+      <!-- ======================== How it works ======================== -->
+      <div id="tab-how" class="tab-panel" hidden>
+        <section class="panel panel--wide how-panel">
+          <h2>How Pip grows</h2>
+          <p class="how-rule"><strong>$1 saved after a completed purchase = 10 XP.</strong> Not money spent -- Pip only grows from money you kept.</p>
+          <p class="how-sub">No streaks, no shopping quests, no pressure to buy more to make progress. A detected coupon shows what you <em>could</em> save, but it only counts once a purchase actually completes.</p>
+
+          <h3>The four tiers</h3>
+          <div class="how-tiers" id="how-tiers"></div>
+
+          <h3>Where the numbers come from</h3>
+          <ul class="how-list">
+            <li><strong>Total saved</strong> -- the sum of every confirmed purchase's savings.</li>
+            <li><strong>This month</strong> -- the same total, filtered to purchases made in the current calendar month.</li>
+            <li><strong>XP</strong> -- total saved &times; 10, always. Tiers are just checkpoints along that one number.</li>
+          </ul>
+        </section>
+      </div>
+    </main>
 
     <script type="module" src="options.js"></script>
   </body>

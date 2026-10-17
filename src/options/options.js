@@ -1,24 +1,50 @@
 import { MSG, sendToBackground } from '../lib/messages.js';
-import { renderCharacterSVG } from '../lib/character.js';
+import { renderCharacterSVG, STAGES } from '../lib/character.js';
 import { purchaseStatus, daysUntilDeadline } from '../lib/purchases.js';
 import { onSettingsChanged } from '../lib/storage.js';
+import { getCurrentDealSavings } from '../../savings-storage/savings-storage.js';
 
 const $ = (id) => document.getElementById(id);
 
 const els = {
+  appTabs: $('app-tabs'),
+  avatarLetter: $('avatar-letter'),
+
+  // --- overview ---
+  dashSubtitle: $('dash-subtitle'),
+  dashDate: $('dash-date'),
+  companionTierLabel: $('companion-tier-label'),
+  xpToast: $('xp-toast'),
+  xpToastAmount: $('xp-toast-amount'),
+  xpToastDesc: $('xp-toast-desc'),
+  xpToastMeta: $('xp-toast-meta'),
+  companionArt: $('companion-art'),
+  nextEvolution: $('next-evolution'),
+  nextEvolutionArt: $('next-evolution-art'),
+  nextEvolutionName: $('next-evolution-name'),
+  nextEvolutionReq: $('next-evolution-req'),
+  companionCaption: $('companion-caption'),
+  progressNextLabel: $('progress-next-label'),
+  progressXp: $('progress-xp'),
+  xpFill: $('xp-fill'),
+  progressNote: $('progress-note'),
+  progressFraction: $('progress-fraction'),
+  sideTotalSaved: $('side-total-saved'),
+  sideThisMonth: $('side-this-month'),
+  recentList: $('recent-list'),
+  recentEmpty: $('recent-empty'),
+  couponTeaser: $('coupon-teaser'),
+  couponTeaserStore: $('coupon-teaser-store'),
+  couponTeaserAmount: $('coupon-teaser-amount'),
+  chaptersGrid: $('chapters-grid'),
+  chaptersCount: $('chapters-count'),
+  viewAllLink: $('view-all-link'),
+  howItWorksLink: $('how-it-works-link'),
+  howTiers: $('how-tiers'),
+
+  // --- activity tab ---
   pendingPanel: $('pending-panel'),
   pendingList: $('pending-list'),
-
-  art: $('character-art'),
-  name: $('character-name'),
-  stage: $('character-stage'),
-  xpFill: $('xp-fill'),
-  xpLabel: $('xp-label'),
-  statSaved: $('stat-saved'),
-  statMonth: $('stat-month'),
-  statItems: $('stat-items'),
-  statReturns: $('stat-returns'),
-  statMissed: $('stat-missed'),
 
   addForm: $('add-form'),
   title: $('f-title'),
@@ -30,6 +56,8 @@ const els = {
   useDefaultWindow: $('use-default-window'),
 
   settingsForm: $('settings-form'),
+  userName: $('s-name'),
+  characterName: $('s-character-name'),
   autoDetect: $('s-auto-detect'),
   skin: $('s-skin'),
   leaf: $('s-leaf'),
@@ -52,15 +80,19 @@ async function init() {
   const res = await sendToBackground(MSG.GET_STATE);
   if (res?.ok) {
     state = res;
-    renderAll();
+    await renderAll();
   }
 
-  els.name.addEventListener('change', async () => {
-    const res = await sendToBackground(MSG.UPDATE_SETTINGS, { characterName: els.name.value || 'Pip' });
-    if (res?.ok) { state = res; renderHero(); }
+  els.appTabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.app-tab');
+    if (btn) switchTab(btn.dataset.tab);
   });
+  els.viewAllLink.addEventListener('click', () => switchTab('activity'));
+  els.howItWorksLink.addEventListener('click', () => switchTab('how'));
 
   const settingFields = [
+    [els.userName, 'userName'],
+    [els.characterName, 'characterName'],
     [els.autoDetect, 'autoDetect'],
     [els.skin, 'skinColor'],
     [els.leaf, 'leafColor'],
@@ -71,11 +103,14 @@ async function init() {
 
   for (const [el, key] of settingFields) {
     el.addEventListener('change', async () => {
-      const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+      const raw = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+      const value = (key === 'userName' || key === 'characterName') && !raw
+        ? (key === 'userName' ? 'Alex' : 'Pip')
+        : raw;
       const res = await sendToBackground(MSG.UPDATE_SETTINGS, { [key]: value });
       if (res?.ok) {
         state = res;
-        renderAll();
+        await renderAll();
         flash(els.settingsStatus, 'Saved.');
       }
     });
@@ -100,17 +135,210 @@ async function init() {
   // Keep in sync if the popup changes settings while this page is open.
   onSettingsChanged(async () => {
     const res = await sendToBackground(MSG.GET_STATE);
-    if (res?.ok) { state = res; renderAll(); }
+    if (res?.ok) { state = res; await renderAll(); }
   });
 }
 
-function renderAll() {
+function switchTab(tab) {
+  for (const btn of els.appTabs.querySelectorAll('.app-tab')) btn.classList.toggle('active', btn.dataset.tab === tab);
+  for (const panel of document.querySelectorAll('.tab-panel')) panel.hidden = panel.id !== `tab-${tab}`;
+}
+
+async function renderAll() {
+  renderDashHead();
+  renderCompanion();
+  await renderSideCol();
+  renderChapters();
+  renderHowTiers();
+
   renderPending();
-  renderHero();
-  renderStats();
   renderSettingsForm();
   renderTable();
 }
+
+// ======================== Overview ========================
+
+function renderDashHead() {
+  const { settings } = state;
+  els.avatarLetter.textContent = (settings.userName || 'A').charAt(0).toUpperCase();
+  els.dashSubtitle.textContent = `Welcome back, ${settings.userName}. Here's what you and ${settings.characterName} have been growing.`;
+  els.dashDate.textContent = `Your journey · ${new Date().toLocaleString(undefined, { month: 'long', year: 'numeric' })}`;
+}
+
+function renderCompanion() {
+  const { settings, character, purchases } = state;
+
+  els.companionTierLabel.textContent = `Tier ${character.level} · ${character.stage.label}`;
+
+  renderXpToast(purchases, settings);
+
+  els.companionArt.innerHTML = renderCharacterSVG(character.stage.key, {
+    skinColor: settings.skinColor,
+    leafColor: settings.leafColor,
+    flowerColor: settings.flowerColor,
+    size: 180,
+    progress: character.progress,
+  });
+
+  if (character.next) {
+    els.nextEvolution.hidden = false;
+    els.nextEvolutionArt.innerHTML = renderCharacterSVG(character.next.key, {
+      skinColor: settings.skinColor,
+      leafColor: settings.leafColor,
+      flowerColor: settings.flowerColor,
+      size: 56,
+    });
+    els.nextEvolutionName.textContent = `\u{1F512} ${character.next.label}`;
+    els.nextEvolutionReq.textContent = `At ${formatMoney(character.next.minSaved, 0)} saved`;
+  } else {
+    els.nextEvolution.hidden = true;
+  }
+
+  els.companionCaption.textContent = character.stageIndex === 0
+    ? `${settings.characterName} is waiting to sprout.`
+    : `${settings.characterName}'s growing, thanks to your savings.`;
+
+  if (character.next) {
+    els.progressNextLabel.textContent = `Next up: ${character.next.label}`;
+    els.progressXp.textContent = `${Math.round(character.xp).toLocaleString()} / ${character.next.minXp.toLocaleString()} XP · ${character.progressPct}%`;
+    els.xpFill.style.width = `${character.progressPct}%`;
+    els.progressNote.textContent = `${formatMoney(character.dollarsToNext)} to go · ${character.next.label} unlocks at ${formatMoney(character.next.minSaved, 0)} saved`;
+    els.progressFraction.textContent = `${formatMoney(character.xp / 10)} / ${formatMoney(character.next.minSaved, 0)}`;
+  } else {
+    els.progressNextLabel.textContent = `${settings.characterName} is fully grown`;
+    els.progressXp.textContent = `${Math.round(character.xp).toLocaleString()} XP`;
+    els.xpFill.style.width = '100%';
+    els.progressNote.textContent = 'Max tier reached -- keep saving to keep the streak alive.';
+    els.progressFraction.textContent = '';
+  }
+}
+
+function renderXpToast(purchases, settings) {
+  const last = [...purchases]
+    .filter((p) => p.savings > 0)
+    .sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate))[0];
+
+  if (!last) {
+    els.xpToast.hidden = true;
+    return;
+  }
+
+  els.xpToast.hidden = false;
+  els.xpToastAmount.textContent = `+${Math.round(last.savings * 10)} XP`;
+  els.xpToastDesc.textContent = `Your last ${formatMoney(last.savings)} saved gave ${settings.characterName} a little boost.`;
+  els.xpToastMeta.textContent = `Purchase completed · ${formatDateShort(last.purchaseDate)}`;
+}
+
+async function renderSideCol() {
+  const { stats, purchases } = state;
+  els.sideTotalSaved.textContent = formatMoney(stats.totalSaved);
+  els.sideThisMonth.textContent = `+${formatMoney(stats.savedThisMonth)}`;
+
+  const recent = [...purchases]
+    .sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate))
+    .slice(0, 3);
+
+  els.recentList.innerHTML = '';
+  els.recentEmpty.hidden = recent.length > 0;
+
+  for (const p of recent) {
+    const li = document.createElement('li');
+    li.className = 'recent-item';
+    const label = p.store || p.title || '?';
+    li.innerHTML = `
+      <span class="recent-item__avatar">${escapeHtml(label.charAt(0).toUpperCase())}</span>
+      <span class="recent-item__main">
+        <p class="recent-item__title">${escapeHtml(p.store || p.title)}</p>
+        <p class="recent-item__meta">${formatDateShort(p.purchaseDate)} · Completed</p>
+      </span>
+      <span class="recent-item__right">
+        <span class="recent-item__amount">${formatMoney(p.savings || p.pricePaid)}</span>
+        ${p.savings ? `<span class="recent-item__xp">+${Math.round(p.savings * 10)} XP</span>` : ''}
+      </span>
+    `;
+    els.recentList.appendChild(li);
+  }
+
+  // Ties into Rohit's coupon feature: a detected-but-not-yet-applied deal,
+  // written by the coupons flow via savings-storage.js. Shown purely as a
+  // teaser -- it never contributes to totals/XP until a purchase completes.
+  const deal = await getCurrentDealSavings().catch(() => null);
+  if (deal && deal.potentialSavings > 0) {
+    els.couponTeaser.hidden = false;
+    els.couponTeaserStore.textContent = deal.store || deal.title || 'This site';
+    els.couponTeaserAmount.textContent = formatMoney(deal.potentialSavings);
+  } else {
+    els.couponTeaser.hidden = true;
+  }
+}
+
+function renderChapters() {
+  const { character } = state;
+  els.chaptersCount.textContent = `${character.level} of ${STAGES.length} chapters unlocked`;
+  els.chaptersGrid.innerHTML = '';
+
+  STAGES.forEach((stage, i) => {
+    const card = document.createElement('div');
+    card.className = 'chapter-card' + (i === character.stageIndex ? ' is-current' : '');
+
+    let statusHtml;
+    let fill;
+    if (i < character.stageIndex) {
+      statusHtml = '<span class="chapter-card__status chapter-card__status--unlocked">✓ Unlocked</span>';
+      fill = 1;
+    } else if (i === character.stageIndex) {
+      statusHtml = '<span class="chapter-card__status chapter-card__status--current">✓ You are here</span>';
+      const next = STAGES[i + 1];
+      fill = next ? Math.min(1, Math.max(0, (character.xp - stage.minXp) / (next.minXp - stage.minXp))) : 1;
+    } else if (i === character.stageIndex + 1) {
+      statusHtml = '<span class="chapter-card__status chapter-card__status--next">→ Next up</span>';
+      fill = 0;
+    } else {
+      statusHtml = '<span class="chapter-card__status">\u{1F512} Locked</span>';
+      fill = 0;
+    }
+
+    card.innerHTML = `
+      <div class="chapter-card__head"><span>Tier ${i + 1}</span>${statusHtml}</div>
+      <div class="chapter-card__art"></div>
+      <p class="chapter-card__name">${stage.label}</p>
+      <p class="chapter-card__req">${formatMoney(stage.minSaved, 0)} saved</p>
+      <p class="chapter-card__tagline">${stage.tagline}</p>
+      <div class="chapter-card__bar"><div class="chapter-card__bar-fill" style="width:${Math.round(fill * 100)}%"></div></div>
+    `;
+
+    card.querySelector('.chapter-card__art').innerHTML = renderCharacterSVG(stage.key, {
+      skinColor: state.settings.skinColor,
+      leafColor: state.settings.leafColor,
+      flowerColor: state.settings.flowerColor,
+      size: 48,
+    });
+
+    els.chaptersGrid.appendChild(card);
+  });
+}
+
+function renderHowTiers() {
+  els.howTiers.innerHTML = '';
+  for (const stage of STAGES) {
+    const card = document.createElement('div');
+    card.className = 'how-tier';
+    card.innerHTML = `
+      <div class="how-tier__art"></div>
+      <p class="how-tier__name">${stage.label}</p>
+      <p class="how-tier__req">${formatMoney(stage.minSaved, 0)} saved</p>
+    `;
+    card.querySelector('.how-tier__art').innerHTML = renderCharacterSVG(stage.key, {
+      skinColor: state.settings.skinColor,
+      leafColor: state.settings.leafColor,
+      flowerColor: state.settings.flowerColor,
+      size: 40,
+    });
+    els.howTiers.appendChild(card);
+  }
+}
+
+// ======================== Savings activity (unchanged functionality) ========================
 
 function renderPending() {
   const pending = state.pending || [];
@@ -140,45 +368,22 @@ function renderPending() {
         savings: card.querySelector('.p-savings').value,
       };
       const res = await sendToBackground(MSG.CONFIRM_PENDING, { id: p.id, patch });
-      if (res?.ok) { state = res; renderAll(); }
+      if (res?.ok) { state = res; await renderAll(); }
     });
 
     card.querySelector('.p-dismiss').addEventListener('click', async () => {
       const res = await sendToBackground(MSG.DISMISS_PENDING, { id: p.id });
-      if (res?.ok) { state = res; renderAll(); }
+      if (res?.ok) { state = res; await renderAll(); }
     });
 
     els.pendingList.appendChild(card);
   }
 }
 
-function renderHero() {
-  const { settings, character } = state;
-  els.art.innerHTML = renderCharacterSVG(character.stage.key, {
-    skinColor: settings.skinColor,
-    leafColor: settings.leafColor,
-    flowerColor: settings.flowerColor,
-    size: 96,
-  });
-  els.name.value = settings.characterName;
-  els.stage.textContent = `Tier ${character.level} · ${character.stage.label}`;
-  els.xpFill.style.width = `${Math.round(character.progress * 100)}%`;
-  els.xpLabel.textContent = character.next
-    ? `${Math.round(character.xp).toLocaleString()} / ${character.next.minXp.toLocaleString()} XP to ${character.next.label}`
-    : `${Math.round(character.xp).toLocaleString()} XP · Max tier reached`;
-}
-
-function renderStats() {
-  const { stats } = state;
-  els.statSaved.textContent = formatMoney(stats.totalSaved);
-  els.statMonth.textContent = formatMoney(stats.savedThisMonth);
-  els.statItems.textContent = String(stats.totalItems);
-  els.statReturns.textContent = String(stats.completedReturns);
-  els.statMissed.textContent = String(stats.missedReturns);
-}
-
 function renderSettingsForm() {
   const s = state.settings;
+  els.userName.value = s.userName;
+  els.characterName.value = s.characterName;
   els.autoDetect.checked = s.autoDetect;
   els.skin.value = s.skinColor;
   els.leaf.value = s.leafColor;
@@ -246,13 +451,13 @@ function buildRow(p) {
 
 async function markReturned(id, returned) {
   const res = await sendToBackground(MSG.MARK_RETURNED, { id, returned });
-  if (res?.ok) { state = res; renderAll(); }
+  if (res?.ok) { state = res; await renderAll(); }
 }
 
 async function deletePurchase(id, title) {
   if (!confirm(`Delete "${title}"? This can't be undone.`)) return;
   const res = await sendToBackground(MSG.DELETE_PURCHASE, { id });
-  if (res?.ok) { state = res; renderAll(); }
+  if (res?.ok) { state = res; await renderAll(); }
 }
 
 async function onAddPurchase(e) {
@@ -271,13 +476,21 @@ async function onAddPurchase(e) {
   const res = await sendToBackground(MSG.ADD_PURCHASE, payload);
   if (res?.ok) {
     state = res;
-    renderAll();
+    await renderAll();
     els.addForm.reset();
   }
 }
 
-function formatMoney(n) {
-  return `$${Number(n).toFixed(2).replace(/\.00$/, '')}`;
+// ======================== shared helpers ========================
+
+function formatMoney(n, decimals = 2) {
+  const fixed = Number(n).toFixed(decimals);
+  return `$${decimals === 2 ? fixed.replace(/\.00$/, '') : fixed}`;
+}
+
+function formatDateShort(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function escapeHtml(str) {

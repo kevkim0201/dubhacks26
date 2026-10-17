@@ -1,10 +1,14 @@
 import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG } from '../lib/character.js';
-import { searchCoupons } from '../lib/coupons.js';
+import { mountSquirrelScene } from '../lib/squirrelScene.js';
+import { searchCoupons, rankCoupons, humanizeStoreName } from '../lib/coupons.js';
 
 const $ = (id) => document.getElementById(id);
 
 const els = {
+  viewMain: $('view-main'),
+  viewCoupons: $('view-coupons'),
+
   openDashboard: $('open-dashboard'),
   pendingSection: $('pending-section'),
   pendingList: $('pending-list'),
@@ -20,10 +24,8 @@ const els = {
   progressNote: $('progress-note'),
   dueSection: $('due-soon-section'),
   dueList: $('due-list'),
-  findCoupons: $('find-coupons'),
-  couponList: $('coupon-list'),
-  couponEmpty: $('coupon-empty'),
-  detectedStore: $('detected-store'),
+  openCoupons: $('open-coupons'),
+  detectedStoreNav: $('detected-store-nav'),
   toggleManual: $('toggle-manual'),
   form: $('manual-form'),
   title: $('f-title'),
@@ -33,7 +35,41 @@ const els = {
   deadline: $('f-deadline'),
   scanPage: $('scan-page'),
   status: $('status'),
+
+  openDashboard2: $('open-dashboard-2'),
+  couponsBack: $('coupons-back'),
+  couponsContext: $('coupons-context'),
+  saveCard: $('save-card'),
+  saveStatus: $('save-status'),
+  saveAmount: $('save-amount'),
+  saveDesc: $('save-desc'),
+  checkoutWas: $('checkout-was'),
+  checkoutNow: $('checkout-now'),
+  couponsCount: $('coupons-count'),
+  couponOptions: $('coupon-options'),
+  couponsLoading: $('coupons-loading'),
+  couponsNone: $('coupons-none'),
+  couponsFootnote: $('coupons-footnote'),
+  couponsInsight: $('coupons-insight'),
+  couponsInsightText: $('coupons-insight-text'),
+  applyBtn: $('apply-coupon'),
+  applyBtnLabel: $('apply-btn-label'),
+  applyCaption: $('apply-caption'),
+  pipFooterArt: $('pip-footer-art'),
+  couponsStatus: $('coupons-status'),
 };
+
+let currentState = null;
+// Scratch state for the coupons view -- rebuilt each time it's opened.
+let couponsCtx = { tabId: null, store: null, cartTotal: null, shipping: null, ranked: [], selectedId: null };
+
+// The popup's main character display -- mounted once (it has its own
+// render loop; re-creating it on every render() would be wasteful and
+// would replay the fall-in animation every time the popup refreshes).
+// Pip (renderCharacterSVG) is still used for every *other* character
+// icon in this file (the coupons-view footer) -- only the big main-view
+// display is the 3D squirrel.
+const squirrelScene = mountSquirrelScene(els.art, { size: 150 });
 
 init();
 
@@ -43,6 +79,7 @@ async function init() {
   else setStatus("Couldn't load data.");
 
   els.openDashboard.addEventListener('click', () => chrome.runtime.openOptionsPage());
+  els.openDashboard2.addEventListener('click', () => chrome.runtime.openOptionsPage());
 
   els.toggleManual.addEventListener('click', () => {
     els.form.hidden = !els.form.hidden;
@@ -52,13 +89,21 @@ async function init() {
 
   els.form.addEventListener('submit', onManualSubmit);
   els.scanPage.addEventListener('click', onScanPage);
-  els.findCoupons.addEventListener('click', onFindCoupons);
+  els.openCoupons.addEventListener('click', onOpenCoupons);
+  els.couponsBack.addEventListener('click', () => showView('main'));
+  els.applyBtn.addEventListener('click', onApplyCoupon);
 
-  // Honey Lifecycle: Automatically resolve current tab store & populate coupons
+  // Honey Lifecycle: Automatically resolve current tab store & update nav pill
   await autoDetectStore();
 }
 
+function showView(view) {
+  els.viewMain.hidden = view !== 'main';
+  els.viewCoupons.hidden = view !== 'coupons';
+}
+
 function render(state) {
+  currentState = state;
   const { settings, character, stats, pending } = state;
 
   renderPending(pending);
@@ -68,15 +113,10 @@ function render(state) {
 
   els.tierLabel.textContent = `Tier ${character.level} · ${character.stage.label}`;
 
-  els.art.innerHTML = renderCharacterSVG(character.stage.key, {
-    skinColor: settings.skinColor,
-    leafColor: settings.leafColor,
-    flowerColor: settings.flowerColor,
-    size: 150,
-  });
+  squirrelScene.syncToXP(character.xp);
 
   els.caption.textContent = character.stageIndex === 0
-    ? `${settings.characterName} is waiting to sprout.`
+    ? `${settings.characterName} is waiting for your first saved purchase.`
     : `${settings.characterName}'s growing, thanks to your savings.`;
 
   if (character.next) {
@@ -241,34 +281,31 @@ async function autoDetectStore() {
     const res = await sendToBackground(MSG.RESOLVE_STORE, { url: tab.url, tabId: tab.id });
     const store = res?.store;
 
-    if (store) {
-      els.detectedStore.textContent = store.found ? `${store.name} (${store.domain})` : store.domain;
-      els.detectedStore.hidden = false;
-
-      if (!els.store.value && store.domain) {
-        els.store.value = store.domain;
+    if (store && els.detectedStoreNav) {
+      if (store.found) {
+        els.detectedStoreNav.textContent = store.name;
+        els.detectedStoreNav.hidden = false;
       }
+    }
 
-      // Preload available coupons for the detected store
-      const coupons = await searchCoupons({ store: store.domain, url: tab.url });
-      renderCoupons(coupons);
-      if (coupons.length > 0) {
-        setStatus(`Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'} for ${store.name || store.domain}.`);
-      }
+    if (!els.store.value && store?.domain) {
+      els.store.value = store.domain;
     }
   } catch {
     // Tab querying may not be available on system pages
   }
 }
 
-// Savings-maximization entry point: detect whether
-// this page has a coupon field and fetch candidate codes via Honey store resolution.
-async function onFindCoupons() {
-  setStatus('Looking for coupons…');
-  els.findCoupons.disabled = true;
+// ======================== Coupons & savings view ========================
+// Owned by: <you> + Rohit.
+
+async function onOpenCoupons() {
+  showView('coupons');
+  resetCouponsView();
+
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) throw new Error('no active tab');
+    if (!tab?.id || !tab.url) throw new Error('no active tab');
 
     let pageResult = null;
     try {
@@ -283,57 +320,240 @@ async function onFindCoupons() {
 
     const res = await sendToBackground(MSG.RESOLVE_STORE, { url: tab.url, tabId: tab.id });
     const resolvedStore = res?.store;
-    const storeDomain = resolvedStore?.domain || pageResult?.store || new URL(tab.url).hostname.replace(/^www\./, '');
+    const store = resolvedStore?.domain || pageResult?.store || safeHostname(tab.url);
+    const storeDisplayName = resolvedStore?.name ? `${resolvedStore.name} (${store})` : humanizeStoreName(store);
 
-    if (resolvedStore) {
-      els.detectedStore.textContent = resolvedStore.found ? `${resolvedStore.name} (${resolvedStore.domain})` : resolvedStore.domain;
-      els.detectedStore.hidden = false;
+    let cartTotal = pageResult?.cartTotal ?? null;
+    let shipping = pageResult?.shipping ?? null;
+
+    // Demo fallback for test stores (example.com, target.com, nike.com):
+    // If no cart was detected on the page, provide standard cart numbers so
+    // savings calculation and ranking are live and interactive
+    if (cartTotal == null && (store === 'example.com' || store === 'target.com' || store === 'nike.com')) {
+      cartTotal = 120;
+      shipping = 6;
     }
 
-    const coupons = await searchCoupons({ store: storeDomain, url: tab.url });
-    renderCoupons(coupons);
+    couponsCtx = { tabId: tab.id, store, storeDisplayName, cartTotal, shipping, ranked: [], selectedId: null };
 
-    const storeTitle = resolvedStore?.name || storeDomain;
-    if (pageResult?.found) {
-      setStatus(`Promo field detected! ${coupons.length ? `Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'} for ${storeTitle}.` : `No coupons found for ${storeTitle}.`}`);
-    } else {
-      setStatus(coupons.length ? `Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'} for ${storeTitle}.` : `No coupons found for ${storeTitle}.`);
-    }
+    els.couponsContext.textContent = cartTotal != null
+      ? `At ${storeDisplayName} · ${formatMoney(cartTotal)} cart + ${formatMoney(shipping || 0)} shipping`
+      : `At ${storeDisplayName} · couldn't find your cart total on this page`;
+
+    const coupons = await searchCoupons({ store, url: tab.url });
+    renderCouponOptions(coupons);
   } catch {
-    setStatus("Can't check this page for coupons.");
-  } finally {
-    els.findCoupons.disabled = false;
+    els.couponsLoading.hidden = true;
+    els.couponsNone.hidden = false;
+    els.couponsNone.textContent = "Can't check this page for coupons.";
   }
 }
 
-function renderCoupons(coupons) {
-  els.couponList.innerHTML = '';
-  els.couponEmpty.hidden = coupons.length > 0;
+function resetCouponsView() {
+  els.couponsContext.textContent = 'Checking this page…';
+  els.couponOptions.innerHTML = '';
+  els.couponsLoading.hidden = false;
+  els.couponsNone.hidden = true;
+  els.saveCard.hidden = true;
+  els.couponsFootnote.hidden = true;
+  els.couponsInsight.hidden = true;
+  els.applyBtn.disabled = true;
+  els.applyBtnLabel.textContent = 'Select a coupon';
+  couponsCtx = { tabId: null, store: null, cartTotal: null, shipping: null, ranked: [], selectedId: null };
 
-  for (const c of coupons) {
-    const li = document.createElement('li');
-    li.className = 'coupon-item';
+  if (currentState) {
+    els.pipFooterArt.innerHTML = renderCharacterSVG(currentState.character.stage.key, {
+      skinColor: currentState.settings.skinColor,
+      leafColor: currentState.settings.leafColor,
+      flowerColor: currentState.settings.flowerColor,
+      size: 44,
+    });
+  }
+}
 
-    const code = document.createElement('span');
-    code.className = 'coupon-item__code';
-    code.textContent = c.code;
+function renderCouponOptions(coupons) {
+  els.couponsLoading.hidden = true;
+  els.couponOptions.innerHTML = '';
 
-    const desc = document.createElement('span');
-    desc.className = 'coupon-item__desc';
-    desc.textContent = c.description || '';
+  if (!coupons.length) {
+    els.couponsNone.hidden = false;
+    els.couponsCount.textContent = '0 offers';
+    return;
+  }
+  els.couponsNone.hidden = true;
 
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.textContent = 'Copy';
-    copyBtn.addEventListener('click', async () => {
-      await navigator.clipboard.writeText(c.code).catch(() => {});
-      setStatus(`Copied "${c.code}".`);
+  const { cartTotal, shipping } = couponsCtx;
+  const ranked = cartTotal != null
+    ? rankCoupons(coupons, { cartTotal, shipping: shipping || 0 })
+    : coupons.map((c) => ({ ...c, eligible: true, savings: null, estimatedTotal: null, best: false }));
+
+  couponsCtx.ranked = ranked;
+  couponsCtx.selectedId = ranked.find((c) => c.best)?.id ?? ranked.find((c) => c.eligible)?.id ?? ranked[0]?.id ?? null;
+
+  els.couponsCount.textContent = `${ranked.length} offer${ranked.length === 1 ? '' : 's'}`;
+  els.couponsFootnote.hidden = cartTotal == null;
+
+  for (const c of ranked) {
+    els.couponOptions.appendChild(buildCouponOption(c));
+  }
+
+  renderInsight(ranked);
+  renderSaveCard();
+}
+
+function buildCouponOption(c) {
+  const label = document.createElement('label');
+  label.className = 'coupon-option' + (!c.eligible ? ' is-disabled' : '');
+  label.classList.toggle('is-selected', c.id === couponsCtx.selectedId);
+  label.dataset.id = c.id;
+
+  const input = document.createElement('input');
+  input.type = 'radio';
+  input.name = 'coupon-choice';
+  input.className = 'coupon-option__input';
+  input.value = c.id;
+  input.checked = c.id === couponsCtx.selectedId;
+  input.disabled = !c.eligible;
+  input.addEventListener('change', () => {
+    couponsCtx.selectedId = c.id;
+    for (const el of els.couponOptions.querySelectorAll('.coupon-option')) {
+      el.classList.toggle('is-selected', el.dataset.id === couponsCtx.selectedId);
+    }
+    renderSaveCard();
+  });
+
+  const radio = document.createElement('span');
+  radio.className = 'coupon-option__radio';
+
+  const main = document.createElement('span');
+  main.className = 'coupon-option__main';
+
+  const codeRow = document.createElement('span');
+  codeRow.className = 'coupon-option__code-row';
+  const code = document.createElement('span');
+  code.className = 'coupon-option__code';
+  code.textContent = c.code;
+  codeRow.appendChild(code);
+  if (c.best) {
+    const pill = document.createElement('span');
+    pill.className = 'coupon-option__best-pill';
+    pill.textContent = 'Best';
+    codeRow.appendChild(pill);
+  }
+
+  const desc = document.createElement('span');
+  desc.className = 'coupon-option__desc';
+  desc.textContent = c.description || '';
+
+  main.append(codeRow, desc);
+
+  const right = document.createElement('span');
+  right.className = 'coupon-option__right';
+  const save = document.createElement('span');
+  save.className = 'coupon-option__save';
+  const total = document.createElement('span');
+  total.className = 'coupon-option__total';
+
+  if (c.savings == null) {
+    save.textContent = '—';
+  } else if (!c.eligible) {
+    save.textContent = `Needs $${c.minCart} cart`;
+  } else {
+    save.textContent = `Save ${formatMoney(c.savings)}`;
+    total.textContent = `${formatMoney(c.estimatedTotal)} total*`;
+  }
+  right.append(save, total);
+
+  label.append(input, radio, main, right);
+  return label;
+}
+
+function renderSaveCard() {
+  const selected = couponsCtx.ranked.find((c) => c.id === couponsCtx.selectedId);
+  if (!selected || selected.savings == null) {
+    els.saveCard.hidden = true;
+    els.applyBtn.disabled = true;
+    els.applyBtnLabel.textContent = 'Select a coupon';
+    return;
+  }
+
+  els.saveCard.hidden = false;
+  els.saveStatus.textContent = 'Not applied yet';
+  els.saveStatus.className = 'save-card__status';
+  els.saveAmount.textContent = formatMoney(selected.savings);
+  els.saveDesc.textContent = selected.description || '';
+
+  const { cartTotal, shipping } = couponsCtx;
+  els.checkoutWas.textContent = formatMoney(cartTotal + (shipping || 0));
+  els.checkoutNow.textContent = formatMoney(selected.estimatedTotal);
+
+  els.applyBtn.disabled = !selected.eligible;
+  els.applyBtnLabel.textContent = selected.eligible
+    ? `Apply ${selected.code} · save ${formatMoney(selected.savings)}`
+    : `${selected.code} not eligible yet`;
+}
+
+function renderInsight(ranked) {
+  const eligible = ranked.filter((c) => c.eligible && c.savings != null);
+  const diff = eligible.length >= 2 ? round2(eligible[0].savings - eligible[1].savings) : 0;
+
+  if (diff <= 0) {
+    els.couponsInsight.hidden = true;
+    return;
+  }
+  els.couponsInsight.hidden = false;
+  els.couponsInsightText.textContent = `${eligible[0].code} saves ${formatMoney(diff)} more than ${eligible[1].code}.`;
+}
+
+async function onApplyCoupon() {
+  const selected = couponsCtx.ranked.find((c) => c.id === couponsCtx.selectedId);
+  if (!selected || !couponsCtx.tabId) return;
+
+  els.applyBtn.disabled = true;
+  const prevLabel = els.applyBtnLabel.textContent;
+  els.applyBtnLabel.textContent = 'Applying…';
+
+  try {
+    // Re-inject in case the page navigated since coupon-finder.js first
+    // ran -- cheap, and keeps window.__pocketCoupon fresh either way.
+    await chrome.scripting.executeScript({
+      target: { tabId: couponsCtx.tabId },
+      files: ['src/content/coupon-finder.js'],
+    });
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: couponsCtx.tabId },
+      func: (code) => window.__pocketCoupon?.applyCouponOnPage(code),
+      args: [selected.code],
     });
 
-    li.append(code, desc, copyBtn);
-    els.couponList.appendChild(li);
+    if (result?.applied) {
+      els.saveStatus.textContent = 'Applied';
+      els.saveStatus.className = 'save-card__status save-card__status--applied';
+      setCouponsStatus(`Applied "${selected.code}" -- check the page to confirm it took.`);
+    } else {
+      setCouponsStatus(result?.reason || "Couldn't apply this code automatically -- try pasting it at checkout.");
+    }
+  } catch {
+    setCouponsStatus("Couldn't reach this page to apply the code.");
+  } finally {
+    els.applyBtn.disabled = !selected.eligible;
+    els.applyBtnLabel.textContent = prevLabel;
   }
 }
+
+function safeHostname(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'this site';
+  }
+}
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+// ======================== shared helpers ========================
 
 function formatMoney(n, decimals = 2) {
   const fixed = Number(n).toFixed(decimals);
@@ -355,4 +575,11 @@ function setStatus(text) {
   els.status.textContent = text;
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => { els.status.textContent = ''; }, 2500);
+}
+
+let couponsStatusTimer;
+function setCouponsStatus(text) {
+  els.couponsStatus.textContent = text;
+  clearTimeout(couponsStatusTimer);
+  couponsStatusTimer = setTimeout(() => { els.couponsStatus.textContent = ''; }, 3000);
 }
