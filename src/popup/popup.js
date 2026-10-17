@@ -79,6 +79,15 @@ let undoBannerTimer = null;
 // display is the 3D squirrel.
 const squirrelScene = mountSquirrelScene(els.art, { size: 150 });
 
+// When the background opens this as its own floating window (see
+// service-worker.js's openCouponsPopup(), triggered by content.js
+// passively noticing a coupon field), the URL carries which *original*
+// tab this is about -- there's no real "active tab in this window" to
+// query, since this window only ever contains the popup page itself.
+const launchParams = new URLSearchParams(location.search);
+const launchTabId = launchParams.get('tabId') ? Number(launchParams.get('tabId')) : null;
+const launchView = launchParams.get('view');
+
 init();
 
 async function init() {
@@ -98,13 +107,18 @@ async function init() {
   els.form.addEventListener('submit', onManualSubmit);
   els.scanPage.addEventListener('click', onScanPage);
 
-  els.openCoupons.addEventListener('click', onOpenCoupons);
+  els.openCoupons.addEventListener('click', () => onOpenCoupons());
   els.couponsBack.addEventListener('click', () => showView('main'));
   els.applyBtn.addEventListener('click', onApplyCoupon);
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = launchTabId != null
+    ? await chrome.tabs.get(launchTabId).catch(() => null)
+    : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+
   await seedMockDealIfDemo(tab?.url).catch(() => {});
   mountDealSavingsView(els.dealSavings, { tabUrl: tab?.url });
+
+  if (launchView === 'coupons' && launchTabId != null) onOpenCoupons(launchTabId);
 }
 
 function showView(view) {
@@ -287,12 +301,18 @@ function scanPageForProduct() {
 // ======================== Coupons & savings view ========================
 // Owned by: <you> + Rohit.
 
-async function onOpenCoupons() {
+// `explicitTabId` is set when this popup was opened as its own floating
+// window targeting a specific tab (see the launchTabId handling in
+// init() above) -- otherwise this is a normal toolbar-popup open, and
+// the active tab of *this* window is the right one to check.
+async function onOpenCoupons(explicitTabId) {
   showView('coupons');
   resetCouponsView();
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = explicitTabId != null
+      ? await chrome.tabs.get(explicitTabId)
+      : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
     if (!tab?.id || !tab.url) throw new Error('no active tab');
 
     const [{ result }] = await chrome.scripting.executeScript({

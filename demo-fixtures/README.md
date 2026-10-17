@@ -63,7 +63,7 @@ on (it's on by default), visit:
 - `http://localhost:8000/order-confirmation.html`
 - `http://localhost:8000/receipt.html`
 - `http://localhost:8000/spa-checkout.html` (click "Place order" once it loads -- the confirmation state only appears after that)
-- `http://localhost:8000/coupon-checkout.html` -- open the popup's **Coupons & savings** view here first to pick/apply a code through Pocket's own UI (or type one into the page yourself: `POCKET20`, `TAKE15`, `SHIPFREE`), then click **Complete purchase**
+- `http://localhost:8000/coupon-checkout.html` -- with "Pop open coupons when you reach a checkout" on (dashboard settings, on by default), a small popup-styled window should open on its own within a couple seconds, already showing this page's offers -- that's `content.js`'s `checkCheckout()` passively noticing the coupon field and the background opening it via `chrome.windows.create()` (see README.md's "Things that will bite you" for why it's a separate window, not the real toolbar popup). Otherwise, open the toolbar popup's **Coupons & savings** view manually. Either way: pick/apply a code through Pocket's UI (or type one into the page yourself: `POCKET20`, `TAKE15`, `SHIPFREE`), then click **Complete purchase**
 
 A toast should appear on the page within a couple seconds ("Pocket
 spotted ... — click the toolbar icon to confirm"), and the toolbar badge

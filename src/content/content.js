@@ -3,9 +3,25 @@
 // pulled from src/lib/messages.js.
 (() => {
   const MSG_AUTO_DETECTED = 'auto-detected-purchase';
+  const MSG_CHECKOUT_DETECTED = 'checkout-page-detected';
   const CHECK_INTERVAL_MS = 1500;
   const DEBOUNCE_MS = 800;
   const TOAST_ID = 'pocket-toast';
+
+  // Duplicated from src/content/coupon-finder.js's COUPON_FIELD_SELECTORS
+  // (content scripts can't import) -- keep the two in sync if either
+  // changes. This one's only used to notice "a coupon field exists
+  // somewhere on this page" passively; coupon-finder.js still does the
+  // real field-filling/cart-total work, injected on demand.
+  const COUPON_FIELD_SELECTORS = [
+    'input[name*="coupon" i]',
+    'input[name*="promo" i]',
+    'input[id*="coupon" i]',
+    'input[id*="promo" i]',
+    'input[placeholder*="coupon" i]',
+    'input[placeholder*="promo code" i]',
+    'input[placeholder*="discount code" i]',
+  ];
 
   // Two independent signals -- a confirmation-looking URL, or
   // confirmation-looking text on the page. Either alone is enough; this
@@ -26,18 +42,25 @@
 
   let lastHref = location.href;
   let lastCheckedHref = null;
+  let checkoutNotified = false; // per page-load only -- not persisted, unlike ignoredOrderUrls
 
-  chrome.storage.sync.get({ autoDetect: true }).then(({ autoDetect }) => {
-    if (!autoDetect) return;
-    check();
+  chrome.storage.sync.get({ autoDetect: true, autoOpenCoupons: true }).then(({ autoDetect, autoOpenCoupons }) => {
+    if (!autoDetect && !autoOpenCoupons) return;
+
+    const runChecks = () => {
+      if (autoDetect) check();
+      if (autoOpenCoupons) checkCheckout();
+    };
+
+    runChecks();
     setInterval(() => {
       if (location.href !== lastHref) {
         lastHref = location.href;
-        check();
+        runChecks();
       }
     }, CHECK_INTERVAL_MS);
 
-    const observer = new MutationObserver(debounce(check, DEBOUNCE_MS));
+    const observer = new MutationObserver(debounce(runChecks, DEBOUNCE_MS));
     observer.observe(document.body, { childList: true, subtree: true });
   });
 
@@ -47,6 +70,19 @@
       clearTimeout(t);
       t = setTimeout(() => fn(...args), ms);
     };
+  }
+
+  // Passive "is there a coupon field on this page" check -- a much
+  // cheaper, narrower heuristic than coupon-finder.js's full detection
+  // (no cart-total scrape needed here, just "does a field exist"). Fires
+  // at most once per page load; the background decides what to do with
+  // it (currently: pop the popup's coupons view open directly, see
+  // service-worker.js's MSG.CHECKOUT_DETECTED handler).
+  function checkCheckout() {
+    if (checkoutNotified) return;
+    if (!document.querySelector(COUPON_FIELD_SELECTORS.join(','))) return;
+    checkoutNotified = true;
+    chrome.runtime.sendMessage({ type: MSG_CHECKOUT_DETECTED }).catch(() => {});
   }
 
   function check() {

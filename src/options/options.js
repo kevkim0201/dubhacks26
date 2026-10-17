@@ -70,6 +70,7 @@ const els = {
   userName: $('s-name'),
   characterName: $('s-character-name'),
   autoDetect: $('s-auto-detect'),
+  autoOpenCoupons: $('s-auto-open-coupons'),
   skin: $('s-skin'),
   leaf: $('s-leaf'),
   flower: $('s-flower'),
@@ -143,6 +144,7 @@ async function init() {
     [els.userName, 'userName'],
     [els.characterName, 'characterName'],
     [els.autoDetect, 'autoDetect'],
+    [els.autoOpenCoupons, 'autoOpenCoupons'],
     [els.skin, 'skinColor'],
     [els.leaf, 'leafColor'],
     [els.flower, 'flowerColor'],
@@ -456,6 +458,7 @@ function renderSettingsForm() {
   els.userName.value = s.userName;
   els.characterName.value = s.characterName;
   els.autoDetect.checked = s.autoDetect;
+  els.autoOpenCoupons.checked = s.autoOpenCoupons;
   els.skin.value = s.skinColor;
   els.leaf.value = s.leafColor;
   els.flower.value = s.flowerColor;
