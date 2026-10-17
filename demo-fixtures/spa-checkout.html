@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Your Cart — Fernweg Goods</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; max-width: 560px; margin: 48px auto; padding: 0 20px; color: #1f2d22; }
+      .brand { font-weight: 800; color: #2f6b4f; margin-bottom: 24px; }
+      h1 { font-size: 22px; }
+      .items { margin: 20px 0; }
+      .item { display: flex; justify-content: space-between; padding: 6px 0; }
+      button { font: inherit; font-weight: 700; padding: 10px 18px; border: none; border-radius: 10px; background: #2f6b4f; color: white; cursor: pointer; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      #log { margin-top: 28px; font-size: 12px; color: #6b7a70; white-space: pre-line; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Fixture 3/3 -- the SPA path: this page never reloads. Clicking
+      "Place order" below updates the URL with history.pushState() and
+      swaps in confirmation markup via plain DOM mutation -- exactly what
+      a React/Vue checkout does. content.js has no `popstate`/pushState
+      hook; it notices this through its own 1.5s location.href poll and
+      its MutationObserver (800ms debounced), which is the whole reason
+      those two mechanisms exist instead of just a one-shot check on load.
+    -->
+    <div id="view">
+      <p class="brand">fernweg goods</p>
+      <h1 id="heading">Your cart</h1>
+      <div class="items">
+        <div class="item"><span>Enamel Camp Mug</span><span>$18.00</span></div>
+        <div class="item"><span>Trail Mix, 3-pack</span><span>$9.50</span></div>
+      </div>
+      <button id="place-order">Place order — $27.50</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+      const log = (msg) => {
+        document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${msg}\n`;
+      };
+
+      document.getElementById('place-order').addEventListener('click', () => {
+        const btn = document.getElementById('place-order');
+        btn.disabled = true;
+        btn.textContent = 'Placing order…';
+        log('Order submitted (no page reload) -- watch for Pocket\'s toast in a moment.');
+
+        // Real checkout flows do this after an async "place order" call
+        // resolves; the short delay here just makes that visible.
+        setTimeout(() => {
+          history.pushState({}, '', '/order-confirmation');
+
+          document.getElementById('view').innerHTML = `
+            <p class="brand">fernweg goods</p>
+            <h1>Order confirmed</h1>
+            <p>Order number: FW-55120</p>
+            <div class="items">
+              <div class="item"><span>Enamel Camp Mug</span><span>$18.00</span></div>
+              <div class="item"><span>Trail Mix, 3-pack</span><span>$9.50</span></div>
+              <div class="item"><span>Order total</span><span>$27.50</span></div>
+            </div>
+            <p>You saved $5.00 with free shipping over $25.</p>
+          `;
+          log('URL + DOM updated to the confirmation state (pushState, no navigation).');
+        }, 600);
+      });
+    </script>
+  </body>
+</html>
