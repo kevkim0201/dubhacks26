@@ -101,7 +101,7 @@ test("confirming the current deal saves it as a purchase and clears it", async (
   assert.equal(purchase.title, "Sweater");
   assert.equal(purchase.pricePaid, 81.6);
   assert.equal(purchase.savings, 38.4);
-  assert.equal(purchase.source, "deal");
+  assert.equal(purchase.source, "manual");
 
   assert.equal(await getCurrentDealSavings(), null);
   assert.equal((await getPurchases()).length, 1);

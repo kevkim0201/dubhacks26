@@ -7,7 +7,7 @@
   "scripts": {
     "icons": "node scripts/make-icons.mjs",
     "check": "node scripts/check.mjs",
-    "test": "node --test tests/savings.test.js tests/purchases.test.js savings-storage/savings-storage.test.js",
+    "test": "node --test tests/savings.test.js tests/purchases.test.js tests/purchase-sync.test.js savings-storage/savings-storage.test.js",
     "zip": "npm run check && mkdir -p dist && zip -r dist/pocket.zip manifest.json icons src savings-storage squirrel-prototype -x '*.DS_Store' '*.test.js'"
   },
   "dependencies": {

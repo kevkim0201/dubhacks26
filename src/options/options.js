@@ -5,6 +5,8 @@ import { onSettingsChanged } from '../lib/storage.js';
 import { getSavingsSummary } from '../lib/savings-summary.js';
 import { onPurchasesChanged, getCurrentDealSavings } from '../../savings-storage/savings-storage.js';
 import { signInWithGoogle, signOut, getUser } from '../lib/supabase.js';
+import { flushPurchaseSync } from '../lib/purchase-sync.js';
+import { supabaseSyncClient } from '../lib/purchase-sync-client.js';
 import { mountSquirrelScene } from '../lib/squirrelScene.js';
 
 const $ = (id) => document.getElementById(id);
@@ -101,6 +103,11 @@ async function init() {
 
   refreshAuthUI(); // fire-and-forget: hits the network, shouldn't block first paint
 
+  // Back up purchases to Supabase while the dashboard is open. Signed out,
+  // this is a no-op and everything stays queued for later.
+  syncPurchases();
+  setInterval(syncPurchases, 60_000);
+
   els.avatarBtn.addEventListener('click', () => {
     const willOpen = els.accountMenu.hidden;
     els.accountMenu.hidden = !willOpen;
@@ -120,6 +127,7 @@ async function init() {
     try {
       await signInWithGoogle();
       await refreshAuthUI();
+      syncPurchases();
     } catch (err) {
       els.accountError.hidden = false;
       els.accountError.textContent = err.message || 'Sign-in failed.';
@@ -192,6 +200,13 @@ async function init() {
   onPurchasesChanged(async () => {
     const res = await sendToBackground(MSG.GET_STATE);
     if (res?.ok) { state = res; renderAll(); }
+    syncPurchases();
+  });
+}
+
+function syncPurchases() {
+  flushPurchaseSync(supabaseSyncClient).catch((err) => {
+    console.warn('[pocket] purchase sync failed:', err);
   });
 }
 
