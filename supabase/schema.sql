@@ -256,15 +256,16 @@ group by p.user_id;
 -- scope here).
 --
 -- The signal this schema checks a reward claim against is Rohit's
--- coupon-validation pipeline: a purchase only earns acorns if it names a
--- coupon_id AND this same user has a coupon_validations row saying that
--- coupon worked. The claimed `savings` amount is then capped against
--- that coupon's own recorded discount_type/discount_value (or, failing
--- that, the cart_total logged at validation time) rather than trusted
--- outright. A purchase with no coupon attached (a manual entry, or an
--- auto-detected purchase the user never ran through the coupon flow)
--- still counts toward XP once validated, but earns 0 acorns -- there's
--- nothing to check its number against.
+-- coupon-validation pipeline: a purchase only earns anything -- XP *and*
+-- acorns, both -- if it names a coupon_id AND this same user has a
+-- coupon_validations row saying that coupon worked. No coupon attached
+-- (a manual entry, or an auto-detected purchase the user never ran
+-- through the coupon flow) is rejected outright: it was a product call
+-- to only grow the character for purchases made *through Pocket*, not
+-- for savings found/applied some other way. The claimed `savings` amount
+-- on a coupon-backed purchase is capped against that coupon's own
+-- recorded discount_type/discount_value (or, failing that, the
+-- cart_total logged at validation time) rather than trusted outright.
 --
 -- This raises the bar from "edit one field in chrome.storage.local" to
 -- "fabricate a coupon_validations row for a real coupon_id and attach it
@@ -317,45 +318,54 @@ begin
     return;
   end if;
 
-  v_awarded_savings := v_purchase.savings;
-  v_acorns := 0;
+  -- No coupon claimed at all: nothing grows the character for this one,
+  -- XP included -- see the comment above this function for why.
+  if v_purchase.coupon_id is null then
+    update purchases set status = 'rejected', validated_at = now()
+      where id = p_purchase_id;
 
-  if v_purchase.coupon_id is not null then
-    select * into v_coupon from coupons where id = v_purchase.coupon_id;
-
-    select * into v_validation from coupon_validations
-      where coupon_id = v_purchase.coupon_id
-        and user_id = v_purchase.user_id
-        and worked = true
-      order by validated_at desc
-      limit 1;
-
-    if v_validation is null then
-      -- Claimed a coupon but never logged a successful validation of it
-      -- as this user -- reject rather than silently drop the coupon_id
-      -- and award on the self-reported number anyway.
-      update purchases set status = 'rejected', validated_at = now()
-        where id = p_purchase_id;
-
-      return query
-        select 'rejected'::text, 0, cs.total_saved, cs.xp, cs.acorn_balance
-        from character_stats cs where cs.user_id = v_purchase.user_id;
-      return;
-    end if;
-
-    if v_coupon.discount_type = 'percent' and v_coupon.discount_value is not null and v_validation.cart_total is not null then
-      v_cap := v_validation.cart_total * (v_coupon.discount_value / 100.0);
-    elsif v_coupon.discount_type in ('fixed', 'shipping') and v_coupon.discount_value is not null then
-      v_cap := v_coupon.discount_value;
-    else
-      -- Unknown discount shape or missing cart_total: nothing better to
-      -- check against, so fall back to the self-reported number.
-      v_cap := v_awarded_savings;
-    end if;
-
-    v_awarded_savings := least(v_awarded_savings, v_cap);
-    v_acorns := floor(v_awarded_savings / 5)::integer; -- $5 saved = 1 acorn, mirrors XP_PER_ACORN in src/lib/squirrelScene.js
+    return query
+      select 'rejected'::text, 0, cs.total_saved, cs.xp, cs.acorn_balance
+      from character_stats cs where cs.user_id = v_purchase.user_id;
+    return;
   end if;
+
+  select * into v_coupon from coupons where id = v_purchase.coupon_id;
+
+  select * into v_validation from coupon_validations
+    where coupon_id = v_purchase.coupon_id
+      and user_id = v_purchase.user_id
+      and worked = true
+    order by validated_at desc
+    limit 1;
+
+  if v_validation is null then
+    -- Claimed a coupon but never logged a successful validation of it
+    -- as this user -- reject rather than silently drop the coupon_id
+    -- and award on the self-reported number anyway.
+    update purchases set status = 'rejected', validated_at = now()
+      where id = p_purchase_id;
+
+    return query
+      select 'rejected'::text, 0, cs.total_saved, cs.xp, cs.acorn_balance
+      from character_stats cs where cs.user_id = v_purchase.user_id;
+    return;
+  end if;
+
+  v_awarded_savings := v_purchase.savings;
+
+  if v_coupon.discount_type = 'percent' and v_coupon.discount_value is not null and v_validation.cart_total is not null then
+    v_cap := v_validation.cart_total * (v_coupon.discount_value / 100.0);
+  elsif v_coupon.discount_type in ('fixed', 'shipping') and v_coupon.discount_value is not null then
+    v_cap := v_coupon.discount_value;
+  else
+    -- Unknown discount shape or missing cart_total: nothing better to
+    -- check against, so fall back to the self-reported number.
+    v_cap := v_awarded_savings;
+  end if;
+
+  v_awarded_savings := least(v_awarded_savings, v_cap);
+  v_acorns := floor(v_awarded_savings / 5)::integer; -- $5 saved = 1 acorn, mirrors XP_PER_ACORN in src/lib/squirrelScene.js
 
   update purchases
     set status = 'validated',

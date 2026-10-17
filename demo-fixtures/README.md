@@ -34,15 +34,17 @@ merely looks like a checkout. That required adding a `store: 'localhost'`
 copy of those three mock entries in `coupons.js` (flagged in a comment
 there), since the existing mock data was hardcoded to `example.com` only.
 
-This is also the one place to see the gap behind "we should only award
-acorns/XP for purchases made through Pocket": today, `applyCouponOnPage()`
-only confirms it filled a field and clicked a button -- not that a
-discount landed (see its own comment in `coupon-finder.js`), and nothing
-yet *records* that Pocket applied a code at all, so there's no signal yet
-for a later purchase to point back to and prove "this one went through
-our coupon flow." Typing the same code in by hand produces an identical
-confirmation page to Pocket having clicked it for you -- which is exactly
-the gap to close before acorns can be safely gated on it.
+This is also the one place to see the gap behind supabase/schema.sql's
+rule that a purchase only earns XP *or* acorns if it went through
+Pocket's own coupon flow: today, `applyCouponOnPage()` only confirms it
+filled a field and clicked a button -- not that a discount landed (see
+its own comment in `coupon-finder.js`) -- and nothing yet *records* that
+Pocket applied a code at all, so there's no signal yet for a later
+purchase to point back to and prove "this one went through our coupon
+flow." Typing the same code in by hand produces an identical
+confirmation page to Pocket having clicked it for you, which is exactly
+why that write (not just this fixture) is the real next step -- see
+supabase/README.md's "Practical implication" note.
 
 ## Running them
 
