@@ -1,4 +1,5 @@
 import { MSG } from '../lib/messages.js';
+import { startPurchaseSyncWatcher } from '../lib/purchase-sync.js';
 import { DEFAULT_SETTINGS, getSettings, updateSettings } from '../lib/storage.js';
 import {
   getPurchases,
@@ -177,3 +178,7 @@ function notify(title, message) {
     priority: 1,
   });
 }
+
+// Queue purchase changes for the Supabase backup (src/lib/purchase-sync.js).
+// Top level, so the listener is in place whenever the worker wakes.
+startPurchaseSyncWatcher();

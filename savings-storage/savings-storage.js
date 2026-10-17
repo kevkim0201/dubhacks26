@@ -164,7 +164,7 @@ export async function confirmCurrentDeal({ title, purchaseDate } = {}) {
     pricePaid,
     savings: deal.potentialSavings,
     purchaseDate,
-    source: "deal",
+    source: "manual",
   });
 
   await clearCurrentDealSavings();
