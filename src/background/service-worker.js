@@ -14,15 +14,9 @@ import {
   daysUntilDeadline,
 } from '../lib/purchases.js';
 import { xpFromStats, computeLevel } from '../lib/character.js';
+import { searchCoupons, rankCoupons } from '../lib/coupons.js';
 
 const ALARM_NAME = 'check-returns';
-
-// tabId -> the floating coupons-popup window opened for it, so revisiting
-// a checkout on the same tab focuses the existing window instead of
-// piling up new ones. In-memory only -- cleared on service-worker
-// restart, which just means a fresh window gets opened once more; no
-// real cost to losing this.
-const couponWindowByTab = new Map();
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason === 'install') {
@@ -44,15 +38,15 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Central message router. Returning true keeps the channel open for the
 // async reply -- without it the sender's promise resolves to undefined.
-chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  handleMessage(message, sender).then(respond).catch((err) => {
+chrome.runtime.onMessage.addListener((message, _sender, respond) => {
+  handleMessage(message).then(respond).catch((err) => {
     console.error('[pocket] handler failed:', err);
     respond({ ok: false, error: String(err) });
   });
   return true;
 });
 
-async function handleMessage({ type, payload }, sender) {
+async function handleMessage({ type, payload }) {
   switch (type) {
     case MSG.GET_STATE:
       return { ok: true, ...(await buildState()) };
@@ -102,10 +96,16 @@ async function handleMessage({ type, payload }, sender) {
 
     case MSG.CHECKOUT_DETECTED: {
       const settings = await getSettings();
-      const tabId = sender?.tab?.id;
-      if (!settings.autoOpenCoupons || tabId == null) return { ok: true, opened: false };
-      await openCouponsPopup(tabId);
-      return { ok: true, opened: true };
+      if (!settings.autoOpenCoupons) return { ok: true, coupons: [] };
+      const { store, cartTotal, shipping } = payload;
+      const coupons = await searchCoupons({ store });
+      // Same fallback popup.js's onOpenCoupons uses: without a real cart
+      // total, computing "savings" would just be lying with a number
+      // (0 for a percent-off code isn't "no savings", it's "unknown").
+      const ranked = cartTotal != null
+        ? rankCoupons(coupons, { cartTotal, shipping: shipping ?? 0 })
+        : coupons.map((c) => ({ ...c, eligible: true, savings: null, estimatedTotal: null, best: false }));
+      return { ok: true, store, coupons: ranked };
     }
 
     case MSG.CONFIRM_PENDING:
@@ -182,37 +182,6 @@ async function checkReturns() {
   if (changed) await chrome.storage.local.set({ purchases });
   await updateBadge();
 }
-
-// Opens (or focuses an already-open) floating window showing the popup
-// directly on its coupons view, for the tab that just showed a coupon
-// field -- this is the whole reason CHECKOUT_DETECTED exists: Chrome
-// only allows chrome.action.openPopup() in direct response to a user
-// gesture (a toolbar click, a keyboard shortcut), which a passively
-// detected page load is not -- see the manifest/background comments in
-// README.md's "Things that will bite you". chrome.windows.create() has
-// no such restriction, so a small popup-styled window is the one way to
-// show this UI unprompted.
-async function openCouponsPopup(tabId) {
-  const existingWindowId = couponWindowByTab.get(tabId);
-  if (existingWindowId != null) {
-    try {
-      await chrome.windows.update(existingWindowId, { focused: true });
-      return;
-    } catch {
-      couponWindowByTab.delete(tabId); // window was already closed
-    }
-  }
-
-  const url = chrome.runtime.getURL(`src/popup/popup.html?view=coupons&tabId=${tabId}`);
-  const win = await chrome.windows.create({ url, type: 'popup', width: 380, height: 680, focused: true });
-  couponWindowByTab.set(tabId, win.id);
-}
-
-chrome.windows.onRemoved.addListener((windowId) => {
-  for (const [tabId, winId] of couponWindowByTab) {
-    if (winId === windowId) couponWindowByTab.delete(tabId);
-  }
-});
 
 function notify(title, message) {
   chrome.notifications.create({

@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS = {
   notifyDaysBefore: 3,      // "due soon" window, in days, used for alerts + badge
   defaultReturnWindowDays: 30,
   autoDetect: true,          // whether the content script watches for order confirmations
-  autoOpenCoupons: true,     // whether a detected checkout page pops the coupons view open unprompted
+  autoOpenCoupons: true,     // whether a detected checkout page shows an in-page coupon card unprompted
 };
 
 export async function getSettings() {
