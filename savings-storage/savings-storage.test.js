@@ -12,6 +12,7 @@ import {
   savePurchase,
 } from "./savings-storage.js";
 import { getStats } from "../src/lib/purchases.js";
+import { resetMockDeal, seedMockDealIfDemo } from "./mock-deal.js";
 
 function installChromeStorageMock() {
   const values = {};
@@ -120,4 +121,25 @@ test("purchase listener fires only for purchase changes and unsubscribes", async
   unsubscribe();
   await savePurchase({ title: "Plate", pricePaid: 9 });
   assert.equal(calls, 1);
+});
+
+test("demo deal is seeded once on example.com and never comes back", async () => {
+  installChromeStorageMock();
+  const demoUrl = "http://example.com/";
+
+  assert.equal(await seedMockDealIfDemo("https://shop.other.com/p/1"), null);
+  assert.equal(await getCurrentDealSavings(), null);
+
+  const seeded = await seedMockDealIfDemo(demoUrl);
+  assert.equal(seeded.potentialSavings, 54);
+  assert.equal((await getCurrentDealSavings()).url, demoUrl);
+
+  // Confirming it and reopening the popup must not hand it out again.
+  await confirmCurrentDeal();
+  assert.equal(await seedMockDealIfDemo(demoUrl), null);
+  assert.equal(await getCurrentDealSavings(), null);
+  assert.equal((await getPurchases()).length, 1);
+
+  await resetMockDeal();
+  assert.equal((await seedMockDealIfDemo(demoUrl)).potentialSavings, 54);
 });
