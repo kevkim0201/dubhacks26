@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Your Cart — Trailside Supply Co.</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; max-width: 560px; margin: 48px auto; padding: 0 20px; color: #1f2d22; }
+      .brand { font-weight: 800; color: #2f6b4f; margin-bottom: 24px; }
+      h1 { font-size: 22px; }
+      .items { margin: 20px 0; }
+      .item, .row { display: flex; justify-content: space-between; padding: 6px 0; }
+      .totals { margin-top: 16px; padding-top: 12px; border-top: 1px solid #d7e0d9; }
+      .totals .row.grand { font-weight: 800; }
+      .promo-row { display: flex; gap: 8px; margin: 20px 0; }
+      .promo-row input { flex: 1; font: inherit; padding: 9px 12px; border: 1px solid #c7d2cb; border-radius: 8px; }
+      button { font: inherit; font-weight: 700; padding: 10px 18px; border: none; border-radius: 10px; background: #2f6b4f; color: white; cursor: pointer; }
+      button.secondary { background: #e7efe9; color: #2f6b4f; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      #promo-status { font-size: 13px; margin: -8px 0 16px; min-height: 18px; }
+      #promo-status.ok { color: #2f6b4f; font-weight: 700; }
+      #promo-status.bad { color: #a33; }
+      #log { margin-top: 28px; font-size: 12px; color: #6b7a70; white-space: pre-line; }
+    </style>
+
+    <!--
+      Fixture 4/4 -- the coupon stage, upstream of order-confirmation.
+      This gives src/content/coupon-finder.js something real to find:
+      a coupon field matching its COUPON_FIELD_SELECTORS, "subtotal"/
+      "shipping" text for detectCartTotals(), and an Apply-labeled button
+      for applyCouponOnPage()'s findApplyButton(). The $120/$6 cart and
+      the three codes below intentionally match src/lib/coupons.js's
+      MOCK_COUPONS exactly (POCKET20/TAKE15/SHIPFREE), so Pocket's own
+      "Coupons & savings" view ranks and applies against this page for
+      real, not just against a page that merely looks like a checkout.
+
+      Clicking "Apply" (whether you type a code yourself or Pocket's
+      applyCouponOnPage() does it for you via chrome.scripting.executeScript)
+      actually recalculates the total below -- unlike applyCouponOnPage()
+      itself, which only confirms it clicked something, not that a
+      discount landed. Watching the total actually change here is the
+      manual check for that.
+    -->
+  </head>
+  <body>
+    <p class="brand">trailside supply co.</p>
+    <h1 id="heading">Your cart</h1>
+
+    <div class="items">
+      <div class="item"><span>Insulated Water Bottle</span><span>$42.00</span></div>
+      <div class="item"><span>Trail Running Socks (2-pack)</span><span>$28.00</span></div>
+      <div class="item"><span>Compact First Aid Kit</span><span>$50.00</span></div>
+    </div>
+
+    <div class="promo-row">
+      <input type="text" id="promo-code" placeholder="Promo code" />
+      <button type="button" id="apply-promo">Apply</button>
+    </div>
+    <p id="promo-status"></p>
+
+    <div class="totals">
+      <div class="row"><span>Subtotal</span><span id="subtotal-amount">$120.00</span></div>
+      <div class="row"><span>Shipping</span><span id="shipping-amount">$6.00</span></div>
+      <div class="row grand"><span>Total</span><span id="total-amount">$126.00</span></div>
+    </div>
+
+    <p style="margin-top: 24px;">
+      <button type="button" id="complete-purchase">Complete purchase</button>
+    </p>
+
+    <div id="log"></div>
+
+    <script>
+      // Matches src/lib/coupons.js's MOCK_COUPONS exactly.
+      const CODES = {
+        POCKET20: { label: '20% off eligible items', type: 'percent', value: 20 },
+        TAKE15: { label: '$15 off $75 minimum', type: 'fixed', value: 15, minCart: 75 },
+        SHIPFREE: { label: 'Free standard shipping', type: 'shipping' },
+      };
+      const SUBTOTAL = 120.00;
+      const SHIPPING = 6.00;
+      let appliedSavings = 0;
+      let appliedCode = null;
+
+      const log = (msg) => {
+        document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${msg}\n`;
+      };
+      const money = (n) => `$${n.toFixed(2)}`;
+
+      function renderTotals() {
+        const shippingShown = appliedCode && CODES[appliedCode].type === 'shipping' ? 0 : SHIPPING;
+        document.getElementById('shipping-amount').textContent = money(shippingShown);
+        document.getElementById('total-amount').textContent = money(Math.max(0, SUBTOTAL + shippingShown - appliedSavings));
+      }
+
+      document.getElementById('apply-promo').addEventListener('click', () => {
+        const raw = document.getElementById('promo-code').value.trim().toUpperCase();
+        const status = document.getElementById('promo-status');
+        const coupon = CODES[raw];
+
+        if (!coupon) {
+          status.textContent = raw ? `"${raw}" didn't work on this cart.` : 'Enter a code first.';
+          status.className = 'bad';
+          log(`Apply clicked with code="${raw || '(empty)'}" -- rejected.`);
+          return;
+        }
+        if (coupon.minCart && SUBTOTAL < coupon.minCart) {
+          status.textContent = `${raw} needs a $${coupon.minCart}+ cart.`;
+          status.className = 'bad';
+          log(`Apply clicked with code="${raw}" -- below its $${coupon.minCart} minimum.`);
+          return;
+        }
+
+        appliedCode = raw;
+        appliedSavings = coupon.type === 'percent' ? SUBTOTAL * (coupon.value / 100)
+          : coupon.type === 'fixed' ? coupon.value
+          : 0; // shipping-type savings is reflected by zeroing shipping above, not a subtotal deduction
+        renderTotals();
+        status.textContent = `${raw} applied -- ${coupon.label}.`;
+        status.className = 'ok';
+        log(`Apply clicked with code="${raw}" -- accepted (${coupon.label}).`);
+      });
+
+      document.getElementById('complete-purchase').addEventListener('click', () => {
+        const btn = document.getElementById('complete-purchase');
+        btn.disabled = true;
+        btn.textContent = 'Placing order…';
+        log('Order submitted (no page reload).');
+
+        setTimeout(() => {
+          history.pushState({}, '', '/order-confirmation');
+          const shippingShown = appliedCode && CODES[appliedCode].type === 'shipping' ? 0 : SHIPPING;
+          const total = Math.max(0, SUBTOTAL + shippingShown - appliedSavings);
+          const totalSaved = (SUBTOTAL + SHIPPING - total).toFixed(2);
+
+          document.body.innerHTML = `
+            <p class="brand">trailside supply co.</p>
+            <h1>Order confirmed</h1>
+            <p>Order number: TS-40217${appliedCode ? ` &middot; code ${appliedCode}` : ''}</p>
+            <div class="items">
+              <div class="item"><span>Insulated Water Bottle</span><span>$42.00</span></div>
+              <div class="item"><span>Trail Running Socks (2-pack)</span><span>$28.00</span></div>
+              <div class="item"><span>Compact First Aid Kit</span><span>$50.00</span></div>
+              <div class="item"><span>Order total</span><span>${money(total)}</span></div>
+            </div>
+            <p>${appliedCode ? `You saved $${totalSaved} with code ${appliedCode}.` : 'No promo code was applied to this order.'}</p>
+          `;
+          log(`URL + DOM updated to the confirmation state (total ${money(total)}, code: ${appliedCode || 'none'}).`);
+        }, 600);
+      });
+
+      renderTotals();
+    </script>
+  </body>
+</html>

@@ -124,8 +124,18 @@ function round2(n) {
 // shipping -> POCKET20 saves $24, best; TAKE15 needs a $75 cart; SHIPFREE
 // saves the $6 shipping) so the full flow is screenshot-identical on the
 // designated test store before real coupons exist.
+//
+// Duplicated for store: 'localhost' (same codes/discounts) so
+// demo-fixtures/coupon-checkout.html -- served over localhost, not
+// example.com -- gets real, non-empty results here instead of an empty
+// "no offers" state. If this becomes annoying once real coupon data
+// exists, delete the 'localhost' trio; demo-fixtures/README.md doesn't
+// depend on the id values, only the codes/discounts matching the page.
 const MOCK_COUPONS = [
   { id: 'mock-1', store: 'example.com', code: 'POCKET20', description: '20% off · eligible items', discountType: 'percent', discountValue: 20, minCart: 0, confidence: 0.9 },
   { id: 'mock-2', store: 'example.com', code: 'TAKE15', description: '$15 off · $75 minimum', discountType: 'fixed', discountValue: 15, minCart: 75, confidence: 0.75 },
   { id: 'mock-3', store: 'example.com', code: 'SHIPFREE', description: 'Free standard shipping', discountType: 'shipping', minCart: 0, confidence: 0.85 },
+  { id: 'mock-1-local', store: 'localhost', code: 'POCKET20', description: '20% off · eligible items', discountType: 'percent', discountValue: 20, minCart: 0, confidence: 0.9 },
+  { id: 'mock-2-local', store: 'localhost', code: 'TAKE15', description: '$15 off · $75 minimum', discountType: 'fixed', discountValue: 15, minCart: 75, confidence: 0.75 },
+  { id: 'mock-3-local', store: 'localhost', code: 'SHIPFREE', description: 'Free standard shipping', discountType: 'shipping', minCart: 0, confidence: 0.85 },
 ];
