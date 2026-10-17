@@ -5,6 +5,16 @@ extension at all -- per the plan: get the hard part (a real model) and the
 rendering pipeline right in a plain page first, since debugging Three.js
 inside an extension (CSP, reload cycles) is slow.
 
+**This has since been merged into the real popup** -- see
+[`../src/lib/squirrelScene.js`](../src/lib/squirrelScene.js), mounted in
+[`../src/popup/popup.js`](../src/popup/popup.js). This folder stays as a
+fast standalone playground for iterating on the 3D scene (geometry,
+camera, acorn tuning) without an extension reload cycle; port changes
+over to `squirrelScene.js` once they look right here. The two have
+drifted slightly apart already -- this page still uses its own simulated
+purchases + `localStorage`, while the real one reads live `chrome.storage`
+XP and has no persistence of its own (see "What changed" below).
+
 ## Run it
 
 ```bash
