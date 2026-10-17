@@ -57,7 +57,8 @@ Turn detection off entirely via the dashboard's "Detect purchases automatically"
 `src/lib/character.js` is the whole system:
 
 - **XP is literal**: `$1 saved = 10 XP` (shown to the user as-is — no hidden multipliers, no credit for money *spent*).
-- Six tiers, each with a dollar threshold: Seed ($0) → Sprout ($25) → Bloom ($250) → Grove ($750) → Orchard ($2,000) → Evergreen ($5,000).
+- Four tiers, each with a dollar threshold: Seed ($0) → Sprout ($50) → Bloom ($250) → Flourish ($500, the max tier).
+- The dashboard's progress bar/ring show **absolute** progress (`xp / nextTier.minXp`, e.g. 1,284/2,500 = 51%) rather than progress relative to the current tier's own floor -- matches the percentage shown directly in the UI.
 - Pip is **procedurally drawn SVG**, not an image asset — `renderCharacterSVG(stageKey, { skinColor, leafColor, flowerColor, size })` returns a self-contained `<svg>` string. Six stages share one geometry function; only scale/limb/leaf/flower-count parameters change per tier, so there's no per-stage artwork to maintain.
 - Colors are user-themeable (dashboard settings) and rendered via a tiny hex-shading helper (`src/lib/color.js`) — no CSS color-mixing dependency.
 
@@ -75,7 +76,9 @@ src/
   popup/
     popup.html/.css/.js    pending review, character, stats, due-soon returns, coupons, manual-add fallback
   options/
-    options.html/.css/.js  full dashboard: same pieces + settings + purchases table
+    options.html/.css/.js  dashboard, 3 tabs: Overview (companion card, progress ring, chapters
+                           gallery, recent savings, coupon teaser), Savings activity (pending
+                           review, manual add, settings, purchases table), How it works (static)
   lib/
     messages.js            message type constants + send helper
     storage.js              chrome.storage.sync settings wrapper + defaults
@@ -87,6 +90,11 @@ src/
     supabaseConfig.js           [Kevin+Deetya] gitignored -- real project URL/anon key
     supabaseConfig.example.js    [Kevin+Deetya] committed template, copy to the above
 supabase/                  [Kevin+Deetya] schema.sql + setup docs -- see supabase/README.md
+savings-storage/
+  savings-storage.js        [Kevin+Deetya] the "current deal" the dashboard's coupon teaser
+                            reads (getCurrentDealSavings/saveCurrentDealSavings/DEAL_KEY in
+                            chrome.storage.local) -- lives outside src/lib by whoever started it;
+                            left in place rather than moved, to avoid merge friction
 icons/                     generated placeholders — see scripts/make-icons.mjs
 scripts/
   check.mjs                verifies manifest references resolve

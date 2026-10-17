@@ -2,6 +2,7 @@
 // Chrome instances). Purchase data lives separately in storage.local --
 // see purchases.js -- since it can grow past sync's per-item quota.
 export const DEFAULT_SETTINGS = {
+  userName: 'Alex',
   characterName: 'Pip',
   skinColor: '#f3bd93',
   leafColor: '#2f6b4f',
