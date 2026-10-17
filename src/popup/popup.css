@@ -252,6 +252,65 @@ body {
 
 .due-item button { flex: 0 0 auto; padding: 3px 8px; font-size: 11px; }
 
+/* --- coupons --- */
+.coupons { margin-top: 14px; }
+
+.coupons__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.coupons__head .section-title { margin: 0; }
+.coupons__head .link-btn { width: auto; }
+
+.coupon-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coupon-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.coupon-item__code {
+  flex: 0 0 auto;
+  font-family: ui-monospace, Menlo, monospace;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+}
+
+.coupon-item__desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.coupon-item button { flex: 0 0 auto; padding: 3px 8px; font-size: 11px; }
+
+.coupon-empty {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* --- manual add --- */
 .manual-add { margin-top: 14px; }
 

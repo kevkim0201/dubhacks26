@@ -4,6 +4,19 @@ Your savings companion. Manifest V3, no build step: the files you edit are the f
 
 **Core idea:** purchases are detected automatically as you check out (via structured page data + heuristics), staged as a one-tap confirmation, and feed a character — **Pip** — that grows through tiers as you save money. Return deadlines are tracked and alerted on separately.
 
+## Team / workstreams
+
+Two pairs, two file areas, no shared files to collide on:
+
+| Who | Owns | Files |
+| --- | --- | --- |
+| **\<you\> + Rohit** | Savings maximization: finding and validating coupon codes | [`src/lib/coupons.js`](src/lib/coupons.js), [`src/content/coupon-finder.js`](src/content/coupon-finder.js), the "Coupons for this site" section in the popup |
+| **Kevin + Deetya** | Backend / database | [`supabase/`](supabase/) (schema + setup docs), [`src/lib/supabase.js`](src/lib/supabase.js) |
+
+**The integration seam between them:** `searchCoupons()` in `coupons.js` has a `TODO` showing exactly where to call `selectFrom('coupons', ...)` from `supabase.js` once the backend pair has seeded real data — see that file's comments. Until then it returns mock data, so the popup's "Find coupons" button is fully clickable/demoable today.
+
+Neither workstream touches the existing detection/character code (`src/content/content.js`, `src/lib/character.js`, `src/lib/purchases.js`) — ask before changing those, since the whole popup/dashboard depends on their current shape.
+
 ## Load it
 
 1. Open `chrome://extensions`
@@ -53,8 +66,9 @@ src/
   content/
     content.js             passive order-confirmation detector (JSON-LD + heuristics)
     content.css             on-page toast when a purchase is detected
+    coupon-finder.js         [you+Rohit] on-demand coupon-field detector (injected, not declarative)
   popup/
-    popup.html/.css/.js    pending review, character, stats, due-soon returns, manual-add fallback
+    popup.html/.css/.js    pending review, character, stats, due-soon returns, coupons, manual-add fallback
   options/
     options.html/.css/.js  full dashboard: same pieces + settings + purchases table
   lib/
@@ -63,6 +77,11 @@ src/
     purchases.js            chrome.storage.local CRUD: confirmed / pending / ignored
     character.js             XP formula, tier thresholds, Pip's SVG renderer
     color.js                 hex shade() helper used by character.js
+    coupons.js                [you+Rohit] coupon search/validate -- see Team section above
+    supabase.js                [Kevin+Deetya] hand-rolled REST+Auth client, no SDK
+    supabaseConfig.js           [Kevin+Deetya] gitignored -- real project URL/anon key
+    supabaseConfig.example.js    [Kevin+Deetya] committed template, copy to the above
+supabase/                  [Kevin+Deetya] schema.sql + setup docs -- see supabase/README.md
 icons/                     generated placeholders — see scripts/make-icons.mjs
 scripts/
   check.mjs                verifies manifest references resolve

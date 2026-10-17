@@ -1,5 +1,6 @@
 import { MSG, sendToBackground } from '../lib/messages.js';
 import { renderCharacterSVG } from '../lib/character.js';
+import { searchCoupons } from '../lib/coupons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +20,9 @@ const els = {
   progressNote: $('progress-note'),
   dueSection: $('due-soon-section'),
   dueList: $('due-list'),
+  findCoupons: $('find-coupons'),
+  couponList: $('coupon-list'),
+  couponEmpty: $('coupon-empty'),
   toggleManual: $('toggle-manual'),
   form: $('manual-form'),
   title: $('f-title'),
@@ -47,6 +51,7 @@ async function init() {
 
   els.form.addEventListener('submit', onManualSubmit);
   els.scanPage.addEventListener('click', onScanPage);
+  els.findCoupons.addEventListener('click', onFindCoupons);
 }
 
 function render(state) {
@@ -222,6 +227,61 @@ function scanPageForProduct() {
     title: title ? title.slice(0, 140) : null,
     price: Number.isFinite(price) ? price : null,
   };
+}
+
+// Savings-maximization entry point (owned by <you> + Rohit): detect whether
+// this page has a coupon field at all (informational for now), then look up
+// candidate codes for the site via src/lib/coupons.js.
+async function onFindCoupons() {
+  setStatus('Looking for coupons…');
+  els.findCoupons.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('no active tab');
+
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['src/content/coupon-finder.js'],
+    });
+
+    const store = result?.store || new URL(tab.url).hostname.replace(/^www\./, '');
+    const coupons = await searchCoupons({ store, url: tab.url });
+    renderCoupons(coupons);
+    setStatus(coupons.length ? `Found ${coupons.length} coupon${coupons.length === 1 ? '' : 's'}.` : 'No coupons found for this site.');
+  } catch {
+    setStatus("Can't check this page for coupons.");
+  } finally {
+    els.findCoupons.disabled = false;
+  }
+}
+
+function renderCoupons(coupons) {
+  els.couponList.innerHTML = '';
+  els.couponEmpty.hidden = coupons.length > 0;
+
+  for (const c of coupons) {
+    const li = document.createElement('li');
+    li.className = 'coupon-item';
+
+    const code = document.createElement('span');
+    code.className = 'coupon-item__code';
+    code.textContent = c.code;
+
+    const desc = document.createElement('span');
+    desc.className = 'coupon-item__desc';
+    desc.textContent = c.description || '';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = 'Copy';
+    copyBtn.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(c.code).catch(() => {});
+      setStatus(`Copied "${c.code}".`);
+    });
+
+    li.append(code, desc, copyBtn);
+    els.couponList.appendChild(li);
+  }
 }
 
 function formatMoney(n, decimals = 2) {
