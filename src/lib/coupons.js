@@ -36,6 +36,30 @@ export async function searchCoupons({ store, url } = {}) {
   const resolved = resolveStoreFromUrl(url || store);
   const canonicalStore = resolved?.domain || store?.replace(/^www\./, '') || 'unknown';
 
+  // 1. Try FastAPI live coupon backend (real verified codes from network)
+  try {
+    const apiUrl = `http://127.0.0.1:8000/api/coupons?domain=${encodeURIComponent(canonicalStore)}&url=${encodeURIComponent(url || '')}`;
+    const res = await fetch(apiUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.coupons) && data.coupons.length > 0) {
+        return data.coupons.map((c) => ({
+          id: c.id,
+          store: c.store || canonicalStore,
+          code: c.code,
+          description: c.description,
+          discountType: c.discount_type || 'unknown',
+          discountValue: c.discount_value,
+          minCart: c.min_cart || 0,
+          confidence: c.confidence || 0.8,
+          resolvedStore: resolved,
+        }));
+      }
+    }
+  } catch (apiErr) {
+    console.debug('[DubHacks26] Live FastAPI service unavailable, falling back to database/mocks:', apiErr);
+  }
+
   try {
     // Query Supabase seeded table, filtering by canonical store domain and sorting by success count
     const rows = await selectFrom('coupons', {
