@@ -97,9 +97,19 @@ scripts/
 
 ```bash
 npm run check    # validate manifest.json before loading or shipping
+npm test         # run savings/storage unit tests (Node.js 18+)
 npm run icons    # regenerate the placeholder icons
 npm run zip      # check + package dist/pocket.zip for the Web Store
 ```
+
+## Test and run locally
+
+1. Install [Node.js 18 or newer](https://nodejs.org/).
+2. From the repository root, run `npm test` and `npm run check`. Both use Node's built-in tools; no `npm install` is needed.
+3. To run the extension, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select this repository's root folder (the one containing `manifest.json`). Pin Pocket, then click its toolbar icon to exercise the popup and options dashboard.
+4. For purchase-detection smoke testing, open a normal HTTP/HTTPS page that represents an order confirmation. Check the page console for content-script errors, then inspect the staged purchase in the popup. Detection is heuristic, so a miss on a regular storefront page is not by itself a failure. To test coupons, open `http://example.com`, then click **Coupons & savings** in the popup.
+
+The current `savings-storage/` files are a Phase 1 prototype: they are not referenced by `manifest.json` or wired into the popup/options UI yet. `npm test` verifies their purchase validation, savings summaries, and Chrome-storage behavior using a local mock; loading the extension does not display that prototype dashboard until it is integrated. The prototype expects a cents-based record (`originalTotalCents`, `paidTotalCents`, `savingsCents`), while the current extension purchase store uses dollar fields (`pricePaid`, `savings`) and `title`; add an adapter or agree on a shared schema before wiring the view to `src/lib/purchases.js`. Supabase setup is not required for the local extension demo.
 
 ## Things that will bite you
 
