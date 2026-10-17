@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
+    <div id="view-main">
     <header class="topbar">
       <div class="brand">
         <svg class="brand__mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
@@ -66,14 +67,16 @@
       <ul class="due-list" id="due-list"></ul>
     </section>
 
-    <section class="coupons">
-      <div class="coupons__head">
-        <p class="section-title">Coupons for this site</p>
-        <button type="button" class="link-btn" id="find-coupons">Find coupons</button>
-      </div>
-      <ul class="coupon-list" id="coupon-list"></ul>
-      <p class="coupon-empty" id="coupon-empty" hidden>No coupons found for this site yet.</p>
-    </section>
+    <button type="button" class="nav-row" id="open-coupons">
+      <svg class="nav-row__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path d="M6 8h12l-1 12H7L6 8Z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" />
+        <path d="M9 8a3 3 0 0 1 6 0" stroke="currentColor" stroke-width="1.6" fill="none" />
+      </svg>
+      <span class="nav-row__label">Coupons &amp; savings</span>
+      <svg class="nav-row__chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
 
     <section class="manual-add">
       <button type="button" class="link-btn" id="toggle-manual">+ Add a purchase manually</button>
@@ -97,6 +100,101 @@
     </section>
 
     <p class="status" id="status" role="status"></p>
+    </div>
+
+    <div id="view-coupons" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand__mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="#2f6b4f" />
+            <path d="M9 14 Q16 22 23 14" stroke="#fdfaf4" stroke-width="3.2" fill="none" stroke-linecap="round" />
+          </svg>
+          <span class="brand__name">pocket</span>
+        </div>
+        <button type="button" class="icon-btn" id="open-dashboard-2" title="Open dashboard" aria-label="Open dashboard">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
+      </header>
+
+      <button type="button" class="back-link" id="coupons-back">
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+          <path d="M15 5 L8 12 L15 19" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Back
+      </button>
+
+      <div class="coupons-title-row">
+        <h2 class="coupons-title">Coupons &amp; savings</h2>
+        <svg class="coupons-bag-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M6 8h12l-1 12H7L6 8Z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" />
+          <path d="M9 8a3 3 0 0 1 6 0" stroke="currentColor" stroke-width="1.6" fill="none" />
+        </svg>
+      </div>
+      <p class="coupons-context" id="coupons-context">Checking this page…</p>
+
+      <div class="save-card" id="save-card" hidden>
+        <div class="save-card__row">
+          <span class="save-card__label">You could save</span>
+          <span class="save-card__status" id="save-status">Not applied yet</span>
+        </div>
+        <div class="save-card__amount-row">
+          <span class="save-card__amount" id="save-amount">$0.00</span>
+          <span class="save-card__desc" id="save-desc"></span>
+        </div>
+        <hr class="save-card__divider" />
+        <div class="save-card__row">
+          <div>
+            <p class="save-card__label">Estimated checkout</p>
+            <p class="save-card__sublabel">Includes shipping &middot; before tax</p>
+          </div>
+          <div class="save-card__totals">
+            <span class="save-card__was" id="checkout-was"></span>
+            <span class="save-card__now" id="checkout-now">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="coupons-section-head">
+        <p class="section-title">Available coupons</p>
+        <span class="coupons-count" id="coupons-count">0 offers</span>
+      </div>
+      <p class="coupons-hint">Choose one &middot; these coupons don't stack.</p>
+
+      <div class="coupon-options" id="coupon-options"></div>
+      <p class="coupons-loading" id="coupons-loading">Looking for coupons…</p>
+      <p class="coupons-none" id="coupons-none" hidden>No coupons found for this site yet.</p>
+
+      <p class="coupons-footnote" id="coupons-footnote" hidden>*Before tax. Your current cart meets these terms.</p>
+
+      <p class="coupons-insight" id="coupons-insight" hidden>
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path d="M12 2a6 6 0 0 0-3 11.2V15a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1.8A6 6 0 0 0 12 2ZM10 19h4M10.5 21h3" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span id="coupons-insight-text"></span>
+      </p>
+
+      <button type="button" class="apply-btn" id="apply-coupon" disabled>
+        <span id="apply-btn-label">Select a coupon</span>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <p class="apply-caption" id="apply-caption">Final discount confirmed at checkout.</p>
+
+      <hr class="divider" />
+
+      <div class="pip-footer">
+        <div id="pip-footer-art" class="pip-footer__art"></div>
+        <div>
+          <p class="pip-footer__title">Save first. Grow with Pip later.</p>
+          <p class="pip-footer__sub">XP updates after your purchase.</p>
+        </div>
+      </div>
+
+      <p class="status" id="coupons-status" role="status"></p>
+    </div>
 
     <script type="module" src="popup.js"></script>
   </body>

@@ -10,10 +10,12 @@ Two pairs, two file areas, no shared files to collide on:
 
 | Who | Owns | Files |
 | --- | --- | --- |
-| **\<you\> + Rohit** | Savings maximization: finding and validating coupon codes | [`src/lib/coupons.js`](src/lib/coupons.js), [`src/content/coupon-finder.js`](src/content/coupon-finder.js), the "Coupons for this site" section in the popup |
+| **\<you\> + Rohit** | Savings maximization: finding and validating coupon codes | [`src/lib/coupons.js`](src/lib/coupons.js), [`src/content/coupon-finder.js`](src/content/coupon-finder.js), the "Coupons & savings" view in the popup |
 | **Kevin + Deetya** | Backend / database | [`supabase/`](supabase/) (schema + setup docs), [`src/lib/supabase.js`](src/lib/supabase.js) |
 
-**The integration seam between them:** `searchCoupons()` in `coupons.js` has a `TODO` showing exactly where to call `selectFrom('coupons', ...)` from `supabase.js` once the backend pair has seeded real data — see that file's comments. Until then it returns mock data, so the popup's "Find coupons" button is fully clickable/demoable today.
+**The integration seam between them:** `searchCoupons()` in `coupons.js` has a `TODO` showing exactly where to call `selectFrom('coupons', ...)` from `supabase.js` once the backend pair has seeded real data — see that file's comments. Until then it returns mock data matching a fixed demo cart ($120 + $6 shipping on `example.com`), so the whole flow — compare offers, see the best one highlighted, apply it — is clickable/demoable today without a live checkout page.
+
+**Testing the coupon view:** open a tab to `http://example.com`, open the popup, click **Coupons & savings**. Real cart-total detection (`src/content/coupon-finder.js`'s `detectCartTotals()`) only kicks in on pages with "subtotal"/"shipping" text near a dollar amount; anywhere else it falls back to the honest "couldn't find your cart" state rather than the demo numbers.
 
 Neither workstream touches the existing detection/character code (`src/content/content.js`, `src/lib/character.js`, `src/lib/purchases.js`) — ask before changing those, since the whole popup/dashboard depends on their current shape.
 

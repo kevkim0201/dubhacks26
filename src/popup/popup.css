@@ -385,3 +385,244 @@ button.primary:hover { filter: brightness(1.08); }
   color: var(--muted);
   text-align: center;
 }
+
+/* --- nav row (main view -> coupons view) --- */
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  color: var(--fg);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-align: left;
+}
+
+.nav-row__icon { flex: 0 0 auto; color: var(--accent); }
+.nav-row__label { flex: 1; font-size: 13px; font-weight: 700; }
+.nav-row__chevron { flex: 0 0 auto; color: var(--muted); }
+
+/* ======================== Coupons & savings view ======================== */
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  margin: 14px 0 10px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.coupons-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coupons-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.coupons-bag-icon { flex: 0 0 auto; color: var(--accent); margin-top: 4px; }
+
+.coupons-context {
+  margin: 4px 0 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* --- highlight / savings card --- */
+.save-card {
+  padding: 14px;
+  margin-bottom: 16px;
+  background: var(--accent-soft);
+  border-radius: 12px;
+}
+
+.save-card__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.save-card__label { margin: 0; font-size: 12px; font-weight: 700; color: var(--fg); }
+.save-card__sublabel { margin: 1px 0 0; font-size: 11px; color: var(--muted); }
+.save-card__status { font-size: 11px; color: var(--muted); }
+.save-card__status--applied { color: var(--accent); font-weight: 700; }
+
+.save-card__amount-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.save-card__amount { font-size: 30px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; }
+.save-card__desc { font-size: 12px; color: var(--muted); }
+
+.save-card__divider {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 12px 0;
+}
+
+.save-card__totals { text-align: right; }
+.save-card__was { font-size: 12px; color: var(--muted); text-decoration: line-through; margin-right: 6px; }
+.save-card__now { font-size: 17px; font-weight: 800; color: var(--fg); }
+
+/* --- available coupons --- */
+.coupons-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.coupons-section-head .section-title { margin: 0; }
+.coupons-count { font-size: 11px; color: var(--muted); }
+
+.coupons-hint {
+  margin: 2px 0 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.coupon-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.coupon-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.coupon-option.is-selected { border-color: var(--accent); background: var(--accent-soft); }
+.coupon-option.is-disabled { cursor: not-allowed; opacity: 0.55; }
+
+.coupon-option__input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+.coupon-option__radio {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  box-sizing: border-box;
+}
+
+.coupon-option.is-selected .coupon-option__radio {
+  border-color: var(--accent);
+  border-width: 4.5px;
+}
+
+.coupon-option__main { flex: 1; min-width: 0; }
+
+.coupon-option__code-row { display: flex; align-items: center; gap: 6px; }
+
+.coupon-option__code { font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
+
+.coupon-option__best-pill {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.coupon-option__desc {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coupon-option__right { flex: 0 0 auto; text-align: right; }
+.coupon-option__save { display: block; font-size: 13px; font-weight: 800; }
+.coupon-option__total { display: block; font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+.coupons-loading, .coupons-none {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.coupons-footnote {
+  margin: 10px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.coupons-insight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* --- apply --- */
+.apply-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.apply-btn:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+.apply-btn:not(:disabled):hover { filter: brightness(1.08); }
+
+.apply-caption {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* --- Pip footer --- */
+.pip-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.pip-footer__art { flex: 0 0 auto; width: 44px; height: 44px; }
+.pip-footer__art svg { width: 100%; height: 100%; }
+
+.pip-footer__title { margin: 0; font-size: 12px; font-weight: 700; }
+.pip-footer__sub { margin: 1px 0 0; font-size: 11px; color: var(--muted); }
