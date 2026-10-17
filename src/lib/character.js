@@ -8,13 +8,17 @@ import { shade } from './color.js';
 // Tier thresholds are defined in dollars saved -- the rule shown to the
 // user is literal: "$1 saved after a completed purchase = 10 XP." XP is
 // derived from the dollar thresholds, never the other way around, so the
-// two numbers never drift apart. Four tiers total -- Flourish is the max;
-// there's no tier beyond it.
+// two numbers never drift apart. Five tiers total -- Golden Squirrel is
+// the max; there's no tier beyond it. Names/thresholds match the squirrel
+// theme (src/lib/squirrelScene.js is the popup/dashboard's actual mascot
+// now); the per-tier accessories/environment/fur described in that plan
+// aren't built yet -- only the tier data moved over so far.
 export const STAGES = [
-  { key: 'seed', label: 'Seed', minSaved: 0, tagline: 'Where it all began' },
-  { key: 'sprout', label: 'Sprout', minSaved: 50, tagline: 'A little more life' },
-  { key: 'bloom', label: 'Bloom', minSaved: 250, tagline: 'A new little bloom' },
-  { key: 'flourish', label: 'Flourish', minSaved: 500, tagline: 'Room to flourish' },
+  { key: 'baby', label: 'Baby Squirrel', minSaved: 0, tagline: 'Just getting started' },
+  { key: 'scout', label: 'Scout', minSaved: 25, tagline: 'Out scouting for deals' },
+  { key: 'forager', label: 'Forager', minSaved: 100, tagline: 'Getting good at finding savings' },
+  { key: 'hoarder', label: 'Hoarder', minSaved: 300, tagline: 'Stockpiling the acorn pile' },
+  { key: 'golden', label: 'Golden Squirrel', minSaved: 750, tagline: 'The top of the tree' },
 ].map((s) => ({ ...s, minXp: s.minSaved * 10 }));
 
 export const XP_PER_DOLLAR = 10;
@@ -53,10 +57,11 @@ export function computeLevel(xp) {
 // relative to it via an SVG transform, so only these few numbers change
 // per tier.
 const VISUALS = [
-  { bodyScale: 0.5, limbs: false, asleep: true, leaves: false, flowers: 0, sparkles: 0 },  // seed
-  { bodyScale: 0.78, limbs: true, asleep: false, leaves: true, leafScale: 0.85, flowers: 0, sparkles: 0 }, // sprout
-  { bodyScale: 0.97, limbs: true, asleep: false, leaves: true, leafScale: 1.08, flowers: 2, sparkles: 1 }, // bloom
-  { bodyScale: 1.15, limbs: true, asleep: false, leaves: true, leafScale: 1.25, flowers: 4, sparkles: 3 }, // flourish
+  { bodyScale: 0.5, limbs: false, asleep: true, leaves: false, flowers: 0, sparkles: 0 },  // baby squirrel
+  { bodyScale: 0.72, limbs: true, asleep: false, leaves: true, leafScale: 0.8, flowers: 0, sparkles: 0 }, // scout
+  { bodyScale: 0.9, limbs: true, asleep: false, leaves: true, leafScale: 1.0, flowers: 1, sparkles: 1 }, // forager
+  { bodyScale: 1.05, limbs: true, asleep: false, leaves: true, leafScale: 1.15, flowers: 3, sparkles: 2 }, // hoarder
+  { bodyScale: 1.2, limbs: true, asleep: false, leaves: true, leafScale: 1.3, flowers: 5, sparkles: 3 }, // golden squirrel
 ];
 
 function leafPath(side, scale, color) {

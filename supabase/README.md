@@ -45,8 +45,18 @@ If it still doesn't work: open the dashboard's console and check for an error fr
 ## What's here
 
 - **`schema.sql`** -- starting tables, mirrored from the shapes already used client-side (`src/lib/purchases.js`, `src/lib/character.js` settings). Extend or redesign freely; this is a first draft, not a contract.
-- **`../src/lib/supabase.js`** -- the client. `selectFrom('coupons', { filters: { store: 'target.com' } })` style calls; see its JSDoc comments.
+- **`../src/lib/supabase.js`** -- the client. `selectFrom('coupons', { filters: { store: 'target.com' } })` style calls, plus `callRpc('validate_purchase', { p_purchase_id })` for the functions below; see its JSDoc comments.
 - **Nothing is wired up yet.** The extension currently reads/writes `chrome.storage.local` for purchases (`src/lib/purchases.js`) and `chrome.storage.sync` for settings (`src/lib/storage.js`). Whether/how those move to Supabase (full replacement? local-first with background sync? auth-gated?) is a real design decision worth making as a team before changing those files -- they're actively used by the popup/options/background/content-script code everyone else depends on.
+
+## Acorns / XP reward pipeline
+
+`schema.sql`'s `purchases` table now carries a `status` (`pending_validation` / `validated` / `rejected`), an optional `coupon_id` claim, and `acorns_awarded` -- but only `validate_purchase(p_purchase_id)` (a Postgres function, called via `callRpc`) is allowed to set any of those; the client can insert a purchase claim but can't award itself acorns directly (enforced by column-level `grant`s, not just RLS). It checks the claimed coupon against a `coupon_validations` row from the *same user*, caps the claimed `savings` against that coupon's own recorded discount (or the cart total logged when it was validated) instead of trusting the number outright, then logs the grant to the new append-only `acorn_ledger` table (a user's acorn balance is `sum(delta)`, read via the `acorn_balances` view -- there's no mutable counter a user could edit). A purchase with no coupon attached still earns XP once validated, but 0 acorns.
+
+`character_stats` (view) is the one place to read `total_saved` / `xp` / `acorn_balance` for the signed-in user -- that's meant to replace the client-side math in `src/lib/character.js` once purchases actually flow through Supabase instead of staying local-only.
+
+`redeem_acorns(p_amount, p_reward_type, p_reward_detail)` is a stub for spending the balance -- what it's redeemed *for* is still an open call per the team (see the earlier "savings maximization" discussion: gift cards, donations, in-game skins all came up), but the balance-check-and-debit part is real and atomic, so building the actual reward catalog on top of it later won't need to touch the money-handling logic.
+
+**Read `schema.sql`'s own comment block above `validate_purchase()`** for the honest limitation: this raises the bar from "edit `chrome.storage.local`" to "fabricate a `coupon_validations` row," which is enough to keep a hackathon demo honest but isn't fraud-proof -- real hardening needs a signal the browser extension can't fabricate itself (a retailer webhook / affiliate postback), which is out of scope here.
 
 ## Where this plugs into the coupon feature
 

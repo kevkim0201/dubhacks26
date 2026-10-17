@@ -5,6 +5,7 @@ import { onSettingsChanged } from '../lib/storage.js';
 import { updateSavingsDashboard } from '../popup/savings-view.js';
 import { onPurchasesChanged, getCurrentDealSavings } from '../../savings-storage/savings-storage.js';
 import { signInWithGoogle, signOut, getUser } from '../lib/supabase.js';
+import { mountSquirrelScene } from '../lib/squirrelScene.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -85,6 +86,8 @@ const els = {
 let state = null;
 let filter = 'all';
 let currentUser = null; // Supabase auth user, or null when signed out
+
+const squirrelScene = mountSquirrelScene(els.companionArt, { size: 340 });
 
 init();
 
@@ -246,13 +249,7 @@ function renderCompanion() {
 
   renderXpToast(purchases, settings);
 
-  els.companionArt.innerHTML = renderCharacterSVG(character.stage.key, {
-    skinColor: settings.skinColor,
-    leafColor: settings.leafColor,
-    flowerColor: settings.flowerColor,
-    size: 180,
-    progress: character.progress,
-  });
+  squirrelScene.syncToXP(character.xp);
 
   if (character.next) {
     els.nextEvolution.hidden = false;
@@ -269,7 +266,7 @@ function renderCompanion() {
   }
 
   els.companionCaption.textContent = character.stageIndex === 0
-    ? `${settings.characterName} is waiting to sprout.`
+    ? `${settings.characterName} is waiting for your first saved purchase.`
     : `${settings.characterName}'s growing, thanks to your savings.`;
 
   if (character.next) {

@@ -110,6 +110,19 @@ export async function deleteFrom(table, { filters }) {
   return request(table, { method: 'DELETE', query: buildQuery({ filters }) });
 }
 
+/**
+ * Calls a Postgres function exposed by PostgREST at /rest/v1/rpc/<name> --
+ * see supabase/schema.sql's validate_purchase()/redeem_acorns() for the
+ * ones that currently exist. Runs as the signed-in user (RLS/auth.uid()
+ * still apply inside the function); there's no way to call these as
+ * anyone else.
+ * @param {string} fnName @param {object} [args] keyed by the function's parameter names
+ */
+export async function callRpc(fnName, args = {}) {
+  const [row] = await request(`rpc/${fnName}`, { method: 'POST', body: args });
+  return row ?? null;
+}
+
 // --- Auth: email/password, Google OAuth (see supabase/README.md's
 // "Google sign-in setup" for the Supabase dashboard + Google Cloud
 // Console configuration this needs before it actually works) ---
