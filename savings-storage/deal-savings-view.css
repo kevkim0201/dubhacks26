@@ -115,3 +115,11 @@
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+
+.deal-card__bought {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}

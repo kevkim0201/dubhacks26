@@ -172,7 +172,9 @@ async function checkReturns() {
 function notify(title, message) {
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: 'icons/icon128.png',
+    // Absolute: a relative path resolves against src/background/, where
+    // there's no icons folder, and the notification silently fails.
+    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
     title,
     message,
     priority: 1,
