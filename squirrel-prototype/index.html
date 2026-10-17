@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Squirrel prototype</title>
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        padding: 24px;
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7f3ea;
+        color: #1f2d22;
+      }
+      h1 { font-size: 16px; margin: 0; }
+      p.sub { margin: 0; color: #71806f; font-size: 12px; max-width: 420px; text-align: center; }
+      #stage {
+        width: 320px;
+        height: 320px;
+        border-radius: 16px;
+        background: #e5efe3;
+        overflow: hidden;
+      }
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button {
+        font: inherit;
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #e4ddc9;
+        background: #fdfaf4;
+        cursor: pointer;
+      }
+      button.primary { background: #2f6b4f; color: #fff; border-color: #2f6b4f; }
+      #saved-label { font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <h1>Squirrel prototype</h1>
+    <p class="sub">
+      Standalone page, no build step -- proving the Three.js scene works before
+      moving it into the extension. Placeholder geometry stands in for a real
+      model; swap it for a .glb via GLTFLoader (see comments in squirrel.js).
+    </p>
+    <div id="stage"></div>
+    <div class="controls">
+      <span>Saved: $<span id="saved-label">0</span></span>
+      <button type="button" class="primary" id="add-savings">+ $5 saved</button>
+      <button type="button" id="reset">Reset</button>
+    </div>
+    <script type="module" src="squirrel.js"></script>
+  </body>
+</html>
