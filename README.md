@@ -6,14 +6,17 @@ Your savings companion. Manifest V3, no build step: the files you edit are the f
 
 ## Team / workstreams
 
-Two pairs, two file areas, no shared files to collide on:
+Three areas, no shared files to collide on:
 
 | Who | Owns | Files |
 | --- | --- | --- |
-| **\<you\> + Rohit** | Savings maximization: finding and validating coupon codes | [`src/lib/coupons.js`](src/lib/coupons.js), [`src/content/coupon-finder.js`](src/content/coupon-finder.js), the "Coupons & savings" view in the popup |
+| **Rohit** | Coupon searching + validation: finding candidate codes and confirming they actually work | [`src/lib/coupons.js`](src/lib/coupons.js) (`searchCoupons`, `validateCoupon`, `computeCouponSavings`/`rankCoupons`), [`src/content/coupon-finder.js`](src/content/coupon-finder.js) (field detection, cart-total scraping, `applyCouponOnPage`) |
+| **\<you\>** | The "Coupons & savings" popup view -- wiring Rohit's functions to the UI (selection, highlight card, apply flow) | The coupons-related markup/styles/logic in [`src/popup/popup.html`](src/popup/popup.html), [`popup.css`](src/popup/popup.css), [`popup.js`](src/popup/popup.js) |
 | **Kevin + Deetya** | Backend / database | [`supabase/`](supabase/) (schema + setup docs), [`src/lib/supabase.js`](src/lib/supabase.js) |
 
-**The integration seam between them:** `searchCoupons()` in `coupons.js` has a `TODO` showing exactly where to call `selectFrom('coupons', ...)` from `supabase.js` once the backend pair has seeded real data — see that file's comments. Until then it returns mock data matching a fixed demo cart ($120 + $6 shipping on `example.com`), so the whole flow — compare offers, see the best one highlighted, apply it — is clickable/demoable today without a live checkout page.
+**The integration seam between Rohit and the backend pair:** `searchCoupons()` in `coupons.js` has a `TODO` showing exactly where to call `selectFrom('coupons', ...)` from `supabase.js` once real data exists — see that file's comments. Until then it returns mock data matching a fixed demo cart ($120 + $6 shipping on `example.com`), so the popup view is clickable/demoable today without a live checkout page or backend.
+
+**The seam between Rohit and the popup view:** popup.js only calls `searchCoupons()`, `rankCoupons()`, `computeCouponSavings()`, `humanizeStoreName()` (all exported from `coupons.js`) and the content script's `detectCouponField()` / `detectCartTotals()` / `applyCouponOnPage()` (exposed on `window.__pocketCoupon`, called via `chrome.scripting.executeScript`). Changing what's *inside* those functions (smarter search, real validation, better cart scraping, a smarter apply heuristic) never requires touching the popup files -- the shapes those functions return are the whole contract.
 
 **Testing the coupon view:** open a tab to `http://example.com`, open the popup, click **Coupons & savings**. Real cart-total detection (`src/content/coupon-finder.js`'s `detectCartTotals()`) only kicks in on pages with "subtotal"/"shipping" text near a dollar amount; anywhere else it falls back to the honest "couldn't find your cart" state rather than the demo numbers.
 
@@ -68,7 +71,7 @@ src/
   content/
     content.js             passive order-confirmation detector (JSON-LD + heuristics)
     content.css             on-page toast when a purchase is detected
-    coupon-finder.js         [you+Rohit] on-demand coupon-field detector (injected, not declarative)
+    coupon-finder.js         [Rohit] on-demand coupon-field + cart-total detector, applyCouponOnPage (injected, not declarative)
   popup/
     popup.html/.css/.js    pending review, character, stats, due-soon returns, coupons, manual-add fallback
   options/
@@ -79,7 +82,7 @@ src/
     purchases.js            chrome.storage.local CRUD: confirmed / pending / ignored
     character.js             XP formula, tier thresholds, Pip's SVG renderer
     color.js                 hex shade() helper used by character.js
-    coupons.js                [you+Rohit] coupon search/validate -- see Team section above
+    coupons.js                [Rohit] coupon search/validate/ranking -- see Team section above
     supabase.js                [Kevin+Deetya] hand-rolled REST+Auth client, no SDK
     supabaseConfig.js           [Kevin+Deetya] gitignored -- real project URL/anon key
     supabaseConfig.example.js    [Kevin+Deetya] committed template, copy to the above
