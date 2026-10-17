@@ -8,18 +8,24 @@
 // subscriptions, storage, etc.
 let SUPABASE_URL = '';
 let SUPABASE_ANON_KEY = '';
+let configLoaded = false;
 
-try {
-  const config = await import('./supabaseConfig.js');
-  SUPABASE_URL = config.SUPABASE_URL || '';
-  SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY || '';
-} catch {
-  // Config file not created yet; assertConfigured will provide friendly guidance
+async function loadConfig() {
+  if (configLoaded) return;
+  try {
+    const config = await import('./supabaseConfig.js');
+    SUPABASE_URL = config.SUPABASE_URL || '';
+    SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY || '';
+  } catch {
+    // Config file not created yet; assertConfigured will provide friendly guidance
+  }
+  configLoaded = true;
 }
 
 const SESSION_KEY = 'supabaseSession'; // chrome.storage.local -- access/refresh tokens
 
-function assertConfigured() {
+async function assertConfigured() {
+  await loadConfig();
   if (!SUPABASE_URL || SUPABASE_URL.includes('YOUR-PROJECT')) {
     throw new Error(
       'Supabase is not configured. Copy src/lib/supabaseConfig.example.js to ' +
@@ -34,6 +40,7 @@ async function getAccessToken() {
 }
 
 async function authHeaders() {
+  await assertConfigured();
   const token = await getAccessToken();
   return {
     apikey: SUPABASE_ANON_KEY,
@@ -58,7 +65,7 @@ function buildQuery({ select, filters, order, limit } = {}) {
 }
 
 async function request(path, { method = 'GET', query = '', body, headers = {} } = {}) {
-  assertConfigured();
+  await assertConfigured();
   const url = `${SUPABASE_URL}/rest/v1/${path}${query ? `?${query}` : ''}`;
   const res = await fetch(url, {
     method,
@@ -102,6 +109,7 @@ export async function deleteFrom(table, { filters }) {
 // --- Auth (email/password; swap for OAuth/magic-link later if needed) ---
 
 export async function signUp(email, password) {
+  await assertConfigured();
   const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
     method: 'POST',
     headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
@@ -114,6 +122,7 @@ export async function signUp(email, password) {
 }
 
 export async function signIn(email, password) {
+  await assertConfigured();
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
