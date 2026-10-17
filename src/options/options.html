@@ -2,28 +2,144 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>DubHacks 26 &mdash; Settings</title>
-    <link rel="stylesheet" href="../popup/popup.css" />
-    <style>
-      body { width: 420px; }
-      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-      .row:last-of-type { border-bottom: 0; }
-    </style>
+    <title>Pocket &mdash; Dashboard</title>
+    <link rel="stylesheet" href="options.css" />
   </head>
   <body>
-    <h1>Settings</h1>
+    <div class="wrap">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand__mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="#2f6b4f" />
+            <path d="M9 14 Q16 22 23 14" stroke="#fdfaf4" stroke-width="3.2" fill="none" stroke-linecap="round" />
+          </svg>
+          <span class="brand__name">pocket</span>
+        </div>
+      </header>
 
-    <div class="row">
-      <label for="enabled">Enable on all pages</label>
-      <input type="checkbox" id="enabled" />
+      <section class="panel panel--wide" id="pending-panel" hidden>
+        <h2>Review detected purchases</h2>
+        <div id="pending-list" class="pending-grid"></div>
+      </section>
+
+      <header class="hero">
+        <div id="character-art" class="character-art"></div>
+        <div class="hero__meta">
+          <input type="text" id="character-name" class="character-name-input" />
+          <p class="character-stage" id="character-stage">Tier 1 &middot; Seed</p>
+          <div class="xp-bar"><div class="xp-bar__fill" id="xp-fill"></div></div>
+          <p class="xp-label" id="xp-label">0 XP</p>
+        </div>
+      </header>
+
+      <section class="stats">
+        <div class="stat"><p class="stat__value" id="stat-saved">$0</p><p class="stat__label">Total saved</p></div>
+        <div class="stat"><p class="stat__value" id="stat-month">$0</p><p class="stat__label">This month</p></div>
+        <div class="stat"><p class="stat__value" id="stat-items">0</p><p class="stat__label">Items tracked</p></div>
+        <div class="stat"><p class="stat__value" id="stat-returns">0</p><p class="stat__label">Returns completed</p></div>
+        <div class="stat"><p class="stat__value" id="stat-missed">0</p><p class="stat__label">Missed returns</p></div>
+      </section>
+
+      <div class="columns">
+        <section class="panel">
+          <h2>Add a purchase manually</h2>
+          <p class="hint">Purchases are detected automatically as you check out. Use this for in-store buys, gifts, or anything the detector missed.</p>
+          <form id="add-form">
+            <div class="field">
+              <label for="f-title">What did you buy?</label>
+              <input type="text" id="f-title" required />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="f-store">Store</label>
+                <input type="text" id="f-store" />
+              </div>
+              <div class="field">
+                <label for="f-date">Purchase date</label>
+                <input type="date" id="f-date" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="f-price">Price paid</label>
+                <input type="number" id="f-price" min="0" step="0.01" required />
+              </div>
+              <div class="field">
+                <label for="f-savings">Amount saved</label>
+                <input type="number" id="f-savings" min="0" step="0.01" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-deadline">Return by (optional)</label>
+              <input type="date" id="f-deadline" />
+              <button type="button" id="use-default-window" class="link-btn">Use default window</button>
+            </div>
+            <button type="submit" class="primary">Add purchase</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>Settings</h2>
+          <form id="settings-form">
+            <label class="toggle-row">
+              <span>Detect purchases automatically</span>
+              <input type="checkbox" id="s-auto-detect" />
+            </label>
+            <div class="field">
+              <label for="s-skin">Pip's color</label>
+              <input type="color" id="s-skin" />
+            </div>
+            <div class="field">
+              <label for="s-leaf">Leaf color</label>
+              <input type="color" id="s-leaf" />
+            </div>
+            <div class="field">
+              <label for="s-flower">Flower color</label>
+              <input type="color" id="s-flower" />
+            </div>
+            <div class="field">
+              <label for="s-notify">Notify this many days before a return is due</label>
+              <input type="number" id="s-notify" min="0" max="30" />
+            </div>
+            <div class="field">
+              <label for="s-window">Default return window (days)</label>
+              <input type="number" id="s-window" min="0" max="365" />
+            </div>
+          </form>
+          <p class="status" id="settings-status" role="status"></p>
+        </section>
+      </div>
+
+      <section class="panel panel--wide">
+        <div class="panel__head">
+          <h2>Purchases</h2>
+          <div class="filter-tabs" id="filter-tabs">
+            <button type="button" class="filter-tab active" data-filter="all">All</button>
+            <button type="button" class="filter-tab" data-filter="tracked">Tracked</button>
+            <button type="button" class="filter-tab" data-filter="returned">Returned</button>
+            <button type="button" class="filter-tab" data-filter="missed">Missed</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="purchases-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Store</th>
+                <th>Paid</th>
+                <th>Saved</th>
+                <th>Return by</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="purchases-body"></tbody>
+          </table>
+          <p class="empty" id="empty-state" hidden>Nothing here yet &mdash; Pocket will log purchases as it detects them.</p>
+        </div>
+      </section>
     </div>
-
-    <div class="row">
-      <label for="highlightColor">Accent color</label>
-      <input type="color" id="highlightColor" />
-    </div>
-
-    <p class="status" id="status" role="status"></p>
 
     <script type="module" src="options.js"></script>
   </body>

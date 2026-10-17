@@ -1,6 +1,8 @@
-# DubHacks 26 — Chrome Extension
+# Pocket — Chrome Extension
 
-Manifest V3 Chrome extension. No build step: the files you edit are the files Chrome loads, so iterating is edit → reload.
+Your savings companion. Manifest V3, no build step: the files you edit are the files Chrome loads, so iterating is edit → reload.
+
+**Core idea:** purchases are detected automatically as you check out (via structured page data + heuristics), staged as a one-tap confirmation, and feed a character — **Pip** — that grows through tiers as you save money. Return deadlines are tracked and alerted on separately.
 
 ## Load it
 
@@ -17,29 +19,54 @@ Manifest V3 Chrome extension. No build step: the files you edit are the files Ch
 | Content script or its CSS | Reload the **web page** |
 | `service-worker.js` or `manifest.json` | Hit **Reload** on the card in `chrome://extensions` |
 
-Debug: right-click the popup → Inspect. For the service worker, click the **service worker** link on the extension card. Content script logs show up in the page's own console.
+Debug: right-click the popup → Inspect. For the service worker, click the **service worker** link on the extension card. Content script logs (and the detection toast) show up in the page's own console.
+
+## How detection works
+
+`src/content/content.js` runs on every page and passively watches for order-confirmation signals:
+
+1. **URL/text heuristics** — patterns like `order-confirmation`, "thank you for your order", "order number" in the URL or page heading/body.
+2. **Structured data first** — if the page has `<script type="application/ld+json">` with an `Order` block (common on well-built storefronts), that's used directly: far more reliable than scraping rendered text.
+3. **Fallback scraping** — otherwise it looks for a "total $X.XX" pattern near the word "total", an `<h1>` for the item title, and "you saved $X" phrasing for savings.
+4. A `MutationObserver` + a `location.href` poll handle SPA checkouts that update content without a full page load.
+
+Because this is heuristic, a detected purchase is never silently added — it's staged as **pending** (`chrome.storage.local`), the toolbar badge turns blue, an on-page toast appears, and the popup shows an editable review card with **Confirm** / **Not a purchase**. A dismissed page is remembered (`ignoredOrderUrls`) so it won't resurface. A manual "+ Add a purchase manually" fallback exists in the popup/dashboard for anything the detector can't see (in-store, phone orders, gifts).
+
+Turn detection off entirely via the dashboard's "Detect purchases automatically" setting.
+
+## How Pip grows
+
+`src/lib/character.js` is the whole system:
+
+- **XP is literal**: `$1 saved = 10 XP` (shown to the user as-is — no hidden multipliers, no credit for money *spent*).
+- Six tiers, each with a dollar threshold: Seed ($0) → Sprout ($25) → Bloom ($250) → Grove ($750) → Orchard ($2,000) → Evergreen ($5,000).
+- Pip is **procedurally drawn SVG**, not an image asset — `renderCharacterSVG(stageKey, { skinColor, leafColor, flowerColor, size })` returns a self-contained `<svg>` string. Six stages share one geometry function; only scale/limb/leaf/flower-count parameters change per tier, so there's no per-stage artwork to maintain.
+- Colors are user-themeable (dashboard settings) and rendered via a tiny hex-shading helper (`src/lib/color.js`) — no CSS color-mixing dependency.
 
 ## Layout
 
 ```
-manifest.json              permissions, entry points, keyboard shortcut
+manifest.json              permissions, entry points
 src/
   background/
-    service-worker.js      message router, command handler, settings fan-out
+    service-worker.js      message router, detection intake, return-deadline alarm, badge
   content/
-    content.js             injected into every page (not an ES module)
-    content.css            namespaced under #dubhacks26-panel
+    content.js             passive order-confirmation detector (JSON-LD + heuristics)
+    content.css             on-page toast when a purchase is detected
   popup/
-    popup.html/.css/.js    toolbar popup
+    popup.html/.css/.js    pending review, character, stats, due-soon returns, manual-add fallback
   options/
-    options.html/.js       settings page (reuses popup.css)
+    options.html/.css/.js  full dashboard: same pieces + settings + purchases table
   lib/
-    messages.js            message type constants + send helpers
-    storage.js             chrome.storage.sync wrapper, defaults
+    messages.js            message type constants + send helper
+    storage.js              chrome.storage.sync settings wrapper + defaults
+    purchases.js            chrome.storage.local CRUD: confirmed / pending / ignored
+    character.js             XP formula, tier thresholds, Pip's SVG renderer
+    color.js                 hex shade() helper used by character.js
 icons/                     generated placeholders — see scripts/make-icons.mjs
 scripts/
   check.mjs                verifies manifest references resolve
-  make-icons.mjs           regenerates icons/*.png, no dependencies
+  make-icons.mjs            regenerates icons/*.png, no dependencies
 ```
 
 ## Scripts
@@ -47,23 +74,18 @@ scripts/
 ```bash
 npm run check    # validate manifest.json before loading or shipping
 npm run icons    # regenerate the placeholder icons
-npm run zip      # check + package dist/dubhacks26.zip for the Web Store
+npm run zip      # check + package dist/pocket.zip for the Web Store
 ```
-
-## What's wired up
-
-- **Popup** reads the active tab, toggles the in-page panel, opens settings.
-- **Options** persists to `chrome.storage.sync`; the service worker broadcasts changes to every open tab.
-- **Alt+Shift+D** toggles the in-page panel (rebind at `chrome://extensions/shortcuts`).
 
 ## Things that will bite you
 
-- **Content scripts aren't ES modules.** `src/content/content.js` can't `import`, which is why its constants are duplicated at the top. To share code, use `await import(chrome.runtime.getURL('src/lib/messages.js'))` and add the file to `web_accessible_resources`.
+- **Content scripts aren't ES modules.** `src/content/content.js` can't `import`, which is why its message-type string is duplicated at the top rather than pulled from `src/lib/messages.js`.
 - **`manifest.json` has no comments.** JSON only — a stray `//` breaks the load silently.
-- **`<all_urls>` is broad.** Narrow `content_scripts.matches` to the sites you actually need before submitting to the Web Store; broad host permissions trigger extra review.
+- **The content script matches `<all_urls>` (http/https only).** That's required for passive detection to work on arbitrary storefronts. It does nothing visible unless it thinks it found an order confirmation; there's no injected UI otherwise. Users can turn it off in settings.
 - **Message listeners must `return true`** to reply asynchronously, or the sender gets `undefined`.
-- **No content script on `chrome://` pages, the Web Store, or other extensions' pages.** `sendToTab` returns `null` there instead of throwing.
+- **Detection is heuristic, not exhaustive.** It won't catch every retailer, and it can occasionally misfire on a page that merely *mentions* an order. That's exactly why confirmations are staged rather than auto-added — bad scrapes get caught and edited/dismissed in one tap instead of silently polluting the data.
+- **Local testing over `file://` breaks ES module `<script type="module">` tags** (CORS). If you ever build a standalone preview of the popup/options HTML outside the extension, serve it over `http://` (e.g. `python3 -m http.server`) — inside the actual extension this isn't an issue, since `chrome-extension://` pages aren't subject to the same restriction.
 
 ## Next steps
 
-Rename the extension in `manifest.json` (`name`, `description`) and replace the icons once you know what you're building.
+Tune the dollar thresholds in `src/lib/character.js` (`STAGES`) and the XP rate (`XP_PER_DOLLAR`) to whatever pacing feels right, and consider adding more retailer-specific extraction rules to `content.js` as you test against real checkout pages.

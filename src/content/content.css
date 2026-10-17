@@ -1,48 +1,22 @@
-/* Injected into every matched page -- every selector is namespaced so it can't
-   collide with the host page's own styles. */
-#dubhacks26-panel {
+/* Namespaced under #pocket-toast so it can't collide with the host page. */
+#pocket-toast {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  bottom: 20px;
+  right: 20px;
   z-index: 2147483647;
-  width: 280px;
-  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #18181b;
-  background: #fff;
-  border: 1px solid #e4e4e7;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
-  overflow: hidden;
-}
-
-#dubhacks26-panel .dh-panel__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 8px 8px 12px;
-  background: var(--dh-accent, #6366f1);
-  color: #fff;
-}
-
-#dubhacks26-panel .dh-panel__title {
-  font-weight: 600;
-}
-
-#dubhacks26-panel .dh-panel__close {
-  all: unset;
+  max-width: 300px;
+  padding: 12px 16px;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1f2d22;
+  background: #fdfaf4;
+  border: 1px solid #d9e4da;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
   cursor: pointer;
-  padding: 0 6px;
-  font-size: 18px;
-  line-height: 1;
-  color: #fff;
+  animation: pocket-toast-in 0.25s ease-out;
 }
 
-#dubhacks26-panel .dh-panel__body {
-  padding: 12px;
-}
-
-#dubhacks26-panel .dh-panel__url {
-  margin: 0;
-  word-break: break-word;
+@keyframes pocket-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

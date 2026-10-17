@@ -1,28 +1,25 @@
-// Message type constants shared by the popup, content script, and service worker.
-// Keeping them in one place means a typo is a missing import, not a silent no-op.
+// Message type constants shared by the popup, options page, content
+// script, and service worker. Keeping them in one place means a typo is a
+// missing import, not a silent no-op.
 export const MSG = {
-  PING: 'ping',
-  GET_PAGE_INFO: 'get-page-info',
-  TOGGLE_PANEL: 'toggle-panel',
-  SETTINGS_CHANGED: 'settings-changed',
+  GET_STATE: 'get-state',
+  ADD_PURCHASE: 'add-purchase',         // manual fallback (in-store, gifts, etc.)
+  UPDATE_PURCHASE: 'update-purchase',
+  DELETE_PURCHASE: 'delete-purchase',
+  MARK_RETURNED: 'mark-returned',
+  UPDATE_SETTINGS: 'update-settings',
+  AUTO_DETECTED: 'auto-detected-purchase', // content script -> background
+  CONFIRM_PENDING: 'confirm-pending',
+  DISMISS_PENDING: 'dismiss-pending',
 };
 
-// Send a message to the service worker. Resolves to the response, or null if
-// nothing was listening (Chrome rejects the promise in that case).
+// Send a message to the service worker and return its response.
+// Returns null if nothing was listening (e.g. worker still spinning up).
 export async function sendToBackground(type, payload = {}) {
   try {
-    return await chrome.runtime.sendMessage({ type, payload });
+    const res = await chrome.runtime.sendMessage({ type, payload });
+    return res ?? null;
   } catch {
-    return null;
-  }
-}
-
-// Send a message to a specific tab's content script.
-export async function sendToTab(tabId, type, payload = {}) {
-  try {
-    return await chrome.tabs.sendMessage(tabId, { type, payload });
-  } catch {
-    // The content script isn't injected on chrome:// pages, the Web Store, etc.
     return null;
   }
 }
