@@ -131,6 +131,7 @@ npm run zip      # check + package dist/pocket.zip for the Web Store
 - **Message listeners must `return true`** to reply asynchronously, or the sender gets `undefined`.
 - **Detection is heuristic, not exhaustive.** It won't catch every retailer, and it can occasionally misfire on a page that merely *mentions* an order. That's exactly why confirmations are staged rather than auto-added — bad scrapes get caught and edited/dismissed in one tap instead of silently polluting the data.
 - **Local testing over `file://` breaks ES module `<script type="module">` tags** (CORS). If you ever build a standalone preview of the popup/options HTML outside the extension, serve it over `http://` (e.g. `python3 -m http.server`) — inside the actual extension this isn't an issue, since `chrome-extension://` pages aren't subject to the same restriction.
+- **"Sign in with Google" (dashboard, top-right avatar menu) needs external setup before it works.** The code is complete (`src/lib/supabase.js`'s `signInWithGoogle`), but Google has to be enabled as an auth provider in the Supabase dashboard first, which needs a Google Cloud OAuth client — see `supabase/README.md`'s "Google sign-in setup." Until that's done, clicking it fails with a clear error rather than crashing.
 
 ## Next steps
 

@@ -3,12 +3,21 @@ import { renderCharacterSVG, STAGES } from '../lib/character.js';
 import { purchaseStatus, daysUntilDeadline } from '../lib/purchases.js';
 import { onSettingsChanged } from '../lib/storage.js';
 import { getCurrentDealSavings } from '../../savings-storage/savings-storage.js';
+import { signInWithGoogle, signOut, getUser } from '../lib/supabase.js';
 
 const $ = (id) => document.getElementById(id);
 
 const els = {
   appTabs: $('app-tabs'),
   avatarLetter: $('avatar-letter'),
+  avatarBtn: $('avatar-btn'),
+  accountMenu: $('account-menu'),
+  accountSignedOut: $('account-signed-out'),
+  accountSignedIn: $('account-signed-in'),
+  accountEmail: $('account-email'),
+  accountError: $('account-error'),
+  googleSigninBtn: $('google-signin-btn'),
+  signOutBtn: $('sign-out-btn'),
 
   // --- overview ---
   dashSubtitle: $('dash-subtitle'),
@@ -73,6 +82,7 @@ const els = {
 
 let state = null;
 let filter = 'all';
+let currentUser = null; // Supabase auth user, or null when signed out
 
 init();
 
@@ -82,6 +92,40 @@ async function init() {
     state = res;
     await renderAll();
   }
+
+  refreshAuthUI(); // fire-and-forget: hits the network, shouldn't block first paint
+
+  els.avatarBtn.addEventListener('click', () => {
+    const willOpen = els.accountMenu.hidden;
+    els.accountMenu.hidden = !willOpen;
+    els.avatarBtn.setAttribute('aria-expanded', String(willOpen));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!els.accountMenu.hidden && !e.target.closest('.account')) {
+      els.accountMenu.hidden = true;
+      els.avatarBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  els.googleSigninBtn.addEventListener('click', async () => {
+    els.accountError.hidden = true;
+    els.googleSigninBtn.disabled = true;
+    try {
+      await signInWithGoogle();
+      await refreshAuthUI();
+    } catch (err) {
+      els.accountError.hidden = false;
+      els.accountError.textContent = err.message || 'Sign-in failed.';
+    } finally {
+      els.googleSigninBtn.disabled = false;
+    }
+  });
+
+  els.signOutBtn.addEventListener('click', async () => {
+    await signOut();
+    await refreshAuthUI();
+  });
 
   els.appTabs.addEventListener('click', (e) => {
     const btn = e.target.closest('.app-tab');
@@ -160,9 +204,31 @@ async function renderAll() {
 
 function renderDashHead() {
   const { settings } = state;
-  els.avatarLetter.textContent = (settings.userName || 'A').charAt(0).toUpperCase();
+  els.avatarLetter.textContent = avatarLetterFor(settings);
   els.dashSubtitle.textContent = `Welcome back, ${settings.userName}. Here's what you and ${settings.characterName} have been growing.`;
   els.dashDate.textContent = `Your journey · ${new Date().toLocaleString(undefined, { month: 'long', year: 'numeric' })}`;
+}
+
+function avatarLetterFor(settings) {
+  const label = currentUser ? (currentUser.user_metadata?.full_name || currentUser.email) : settings?.userName;
+  return (label || 'A').charAt(0).toUpperCase();
+}
+
+// Asks Supabase who's signed in (validates the stored session rather
+// than trusting a possibly-stale local copy) and updates both the
+// dropdown panel and the avatar initial. Safe to call with no Supabase
+// project configured yet -- getUser() just resolves to null.
+async function refreshAuthUI() {
+  currentUser = await getUser().catch(() => null);
+
+  els.accountSignedOut.hidden = !!currentUser;
+  els.accountSignedIn.hidden = !currentUser;
+
+  if (currentUser) {
+    els.accountEmail.textContent = currentUser.user_metadata?.full_name || currentUser.email || 'Signed in';
+  }
+
+  if (state) els.avatarLetter.textContent = avatarLetterFor(state.settings);
 }
 
 function renderCompanion() {

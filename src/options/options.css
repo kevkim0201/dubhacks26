@@ -99,6 +99,51 @@ h3 { margin: 20px 0 8px; font-size: 13px; }
   font-weight: 700;
 }
 
+/* --- account dropdown --- */
+.account { position: relative; }
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  width: 220px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  color: #1f2d22;
+  background: #fff;
+  border-color: var(--line);
+  font-weight: 600;
+}
+
+.google-btn:hover { filter: brightness(0.97); }
+
+.account-error {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.account-email {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+#sign-out-btn { width: 100%; }
+
 /* --- tab panels --- */
 .tab-panel { padding-top: 24px; }
 

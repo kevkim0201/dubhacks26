@@ -20,8 +20,28 @@ function assertConfigured() {
 }
 
 async function getAccessToken() {
-  const { [SESSION_KEY]: session } = await chrome.storage.local.get({ [SESSION_KEY]: null });
-  return session?.access_token || null;
+  const session = await getSession();
+  if (!session) return null;
+
+  // Refresh a bit early (30s of slack) rather than waiting for a request
+  // to fail with a 401 -- access tokens are short-lived (~1h) by default.
+  if (session.expires_at && Date.now() > session.expires_at - 30_000) {
+    try {
+      const refreshed = await refreshSession();
+      return refreshed?.access_token || null;
+    } catch {
+      return session.access_token || null; // let the actual request 401 if this truly didn't work
+    }
+  }
+  return session.access_token;
+}
+
+// GoTrue (Supabase Auth) returns `expires_in` (seconds from now), not an
+// absolute time -- stamp one on the way in so getAccessToken() can check
+// it later without redoing this math everywhere a session is stored.
+function withExpiry(session) {
+  const expiresInSec = Number(session.expires_in) || 3600;
+  return { ...session, expires_at: Date.now() + expiresInSec * 1000 };
 }
 
 async function authHeaders() {
@@ -90,7 +110,9 @@ export async function deleteFrom(table, { filters }) {
   return request(table, { method: 'DELETE', query: buildQuery({ filters }) });
 }
 
-// --- Auth (email/password; swap for OAuth/magic-link later if needed) ---
+// --- Auth: email/password, Google OAuth (see supabase/README.md's
+// "Google sign-in setup" for the Supabase dashboard + Google Cloud
+// Console configuration this needs before it actually works) ---
 
 export async function signUp(email, password) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -100,7 +122,7 @@ export async function signUp(email, password) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.msg || data?.error_description || 'Sign up failed');
-  if (data.access_token) await chrome.storage.local.set({ [SESSION_KEY]: data });
+  if (data.access_token) await chrome.storage.local.set({ [SESSION_KEY]: withExpiry(data) });
   return data;
 }
 
@@ -112,8 +134,83 @@ export async function signIn(email, password) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.msg || data?.error_description || 'Sign in failed');
-  await chrome.storage.local.set({ [SESSION_KEY]: data });
+  await chrome.storage.local.set({ [SESSION_KEY]: withExpiry(data) });
   return data;
+}
+
+/**
+ * Google sign-in via chrome.identity.launchWebAuthFlow -- the standard
+ * way an extension does OAuth, distinct from chrome.identity.getAuthToken
+ * (which is Chrome's own native Google flow and needs an `oauth2` key in
+ * the manifest). Here, Supabase is the OAuth client -- it holds the real
+ * Google client ID/secret on its own backend -- so the extension never
+ * touches Google credentials directly, only Supabase's /authorize
+ * redirect and the token fragment it comes back with.
+ */
+export async function signInWithGoogle() {
+  assertConfigured();
+
+  const redirectTo = chrome.identity.getRedirectURL();
+  const authUrl =
+    `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`;
+
+  const responseUrl = await new Promise((resolve, reject) => {
+    chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (url) => {
+      if (chrome.runtime.lastError || !url) {
+        reject(new Error(chrome.runtime.lastError?.message || 'Sign-in was cancelled.'));
+      } else {
+        resolve(url);
+      }
+    });
+  });
+
+  const session = parseSessionFromRedirect(responseUrl);
+  await chrome.storage.local.set({ [SESSION_KEY]: withExpiry(session) });
+  return session;
+}
+
+// Supabase's /authorize redirect hands tokens back in the URL fragment
+// (#access_token=...&refresh_token=...), not a query string or a body --
+// there's no server here to receive a POST, so this is the "implicit"
+// style redirect, read directly off the URL launchWebAuthFlow resolves
+// with. If the Supabase project ever requires PKCE instead, this is the
+// one place that would need to change (exchange a `code` param via
+// POST /auth/v1/token?grant_type=pkce instead of reading a fragment).
+function parseSessionFromRedirect(url) {
+  const fragment = new URL(url).hash.slice(1);
+  const params = new URLSearchParams(fragment);
+
+  const error = params.get('error_description') || params.get('error');
+  if (error) throw new Error(error);
+
+  const access_token = params.get('access_token');
+  if (!access_token) {
+    throw new Error('No access token in the redirect -- check that Google is enabled under Supabase > Authentication > Providers.');
+  }
+
+  return {
+    access_token,
+    refresh_token: params.get('refresh_token'),
+    token_type: params.get('token_type'),
+    expires_in: params.get('expires_in'),
+  };
+}
+
+export async function refreshSession() {
+  const session = await getSession();
+  if (!session?.refresh_token) return null;
+
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: session.refresh_token }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.msg || data?.error_description || 'Session refresh failed');
+
+  const next = withExpiry(data);
+  await chrome.storage.local.set({ [SESSION_KEY]: next });
+  return next;
 }
 
 export async function signOut() {
@@ -123,4 +220,16 @@ export async function signOut() {
 export async function getSession() {
   const { [SESSION_KEY]: session } = await chrome.storage.local.get({ [SESSION_KEY]: null });
   return session;
+}
+
+/** The signed-in user's profile (email, Google name/avatar under `user_metadata`), or null. */
+export async function getUser() {
+  const token = await getAccessToken();
+  if (!token) return null;
+
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json();
 }
