@@ -45,6 +45,10 @@ async def run_demo(req: DealRequest) -> AsyncIterator[dict]:
     for raw in fx["offers"]:
         offer_id = ctx.remember({k: raw[k] for k in ("title", "seller", "price", "shipping", "condition", "link")})
         picks.append({"offer_id": offer_id, "match_confidence": raw["match_confidence"], "reason": raw["reason"]})
+    alt_picks = []
+    for raw in fx.get("alternatives", []):
+        offer_id = ctx.remember({k: raw[k] for k in ("title", "seller", "price", "shipping", "condition", "link")})
+        alt_picks.append({"offer_id": offer_id, **{k: raw[k] for k in ("fit_score", "why", "tradeoff")}})
     ctx.coupons["demo"] = fx.get("coupons", [])
-    response = build_response(req, picks, ctx, fx.get("verdict_reason"))
+    response = build_response(req, picks, ctx, fx.get("verdict_reason"), alt_picks)
     yield {"event": "result", "data": response.model_dump()}

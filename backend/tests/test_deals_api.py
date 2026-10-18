@@ -26,6 +26,9 @@ def test_post_deals_demo_and_cache(client):
     assert body["max_savings"] == 14.01 and body["acorns"] == 14 and body["cached"] is False
     assert all(o["condition"] == "new" for o in body["offers"])  # renewed listing dropped
     assert body["coupons"][0]["code"] == "NOOK10"
+    # Similar picks: the used earbuds are dropped by code; best fit first.
+    assert [a["seller"] for a in body["alternatives"]] == ["Amazon", "Target"]
+    assert body["alternatives"][0]["tradeoff"]
     assert client.post("/api/deals", json={**HEADPHONES, "url": "http://www.localhost:8000/demo/index.html/?utm_source=nook#prod-headphones"}).json()["cached"] is True
 
 

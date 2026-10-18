@@ -1,5 +1,12 @@
 {
-  "match": { "urls": ["http://localhost:8000/demo/index.html#prod-headphones"], "titles": ["EchoPulse Sport Headphones"] },
+  "match": {
+    "urls": [
+      "http://localhost:8000/demo/index.html#prod-headphones"
+    ],
+    "titles": [
+      "EchoPulse Sport Headphones"
+    ]
+  },
   "steps": [
     "Ooh, EchoPulse Sport Headphones! Let me check if that's a good price...",
     "Searching Google Shopping for 'EchoPulse Sport Headphones'...",
@@ -10,13 +17,78 @@
     "Double-checking the math..."
   ],
   "offers": [
-    { "title": "EchoPulse Sport ANC Headphones - Black", "seller": "Target", "price": 74.99, "shipping": 0, "condition": "new",
-      "link": "https://www.target.com/s?searchTerm=EchoPulse+Sport+Headphones", "match_confidence": 0.94, "reason": "Same model and color" },
-    { "title": "EchoPulse Sport Headphones", "seller": "Walmart", "price": 79.0, "shipping": 0, "condition": "new",
-      "link": "https://www.walmart.com/search?q=EchoPulse+Sport+Headphones", "match_confidence": 0.9, "reason": "Same model" },
-    { "title": "EchoPulse Sport Headphones (Renewed)", "seller": "Amazon", "price": 52.0, "shipping": 0, "condition": "refurbished",
-      "link": "https://www.amazon.com/s?k=EchoPulse+Sport+Headphones+renewed", "match_confidence": 0.9, "reason": "Renewed unit" }
+    {
+      "title": "EchoPulse Sport ANC Headphones - Black",
+      "seller": "Target",
+      "price": 74.99,
+      "shipping": 0,
+      "condition": "new",
+      "link": "https://www.target.com/s?searchTerm=EchoPulse+Sport+Headphones",
+      "match_confidence": 0.94,
+      "reason": "Same model and color"
+    },
+    {
+      "title": "EchoPulse Sport Headphones",
+      "seller": "Walmart",
+      "price": 79.0,
+      "shipping": 0,
+      "condition": "new",
+      "link": "https://www.walmart.com/search?q=EchoPulse+Sport+Headphones",
+      "match_confidence": 0.9,
+      "reason": "Same model"
+    },
+    {
+      "title": "EchoPulse Sport Headphones (Renewed)",
+      "seller": "Amazon",
+      "price": 52.0,
+      "shipping": 0,
+      "condition": "refurbished",
+      "link": "https://www.amazon.com/s?k=EchoPulse+Sport+Headphones+renewed",
+      "match_confidence": 0.9,
+      "reason": "Renewed unit"
+    }
   ],
-  "coupons": [{ "code": "NOOK10", "description": "10% off your order (demo store)", "source": "static" }],
-  "verdict_reason": "Same headphones are $14.01 cheaper at Target with free shipping."
+  "coupons": [
+    {
+      "code": "NOOK10",
+      "description": "10% off your order (demo store)",
+      "source": "static"
+    }
+  ],
+  "verdict_reason": "Same headphones are $14.01 cheaper at Target with free shipping.",
+  "alternatives": [
+    {
+      "title": "Soundcore Space Q45 Adaptive Noise Cancelling Headphones",
+      "seller": "Amazon",
+      "price": 59.99,
+      "shipping": 0,
+      "condition": "new",
+      "link": "https://www.amazon.com/s?k=Soundcore+Space+Q45",
+      "fit_score": 0.86,
+      "why": "Also noise cancelling and sweat-safe for workouts",
+      "tradeoff": "Heavier, so less snug for running"
+    },
+    {
+      "title": "JLab Go Work Pop Wireless Headphones",
+      "seller": "Target",
+      "price": 29.99,
+      "shipping": 0,
+      "condition": "new",
+      "link": "https://www.target.com/s?searchTerm=JLab+Go+Work+Pop",
+      "fit_score": 0.72,
+      "why": "Light and cheap for the gym",
+      "tradeoff": "No active noise cancelling"
+    },
+    {
+      "title": "Cheap Bluetooth Earbuds (Used)",
+      "seller": "eBay",
+      "price": 9.0,
+      "shipping": 0,
+      "condition": "used",
+      "link": "https://www.ebay.com/sch/i.html?_nkw=bluetooth+earbuds",
+      "fit_score": 0.9,
+      "why": "Cheap",
+      "tradeoff": "Used"
+    }
+  ]
 }

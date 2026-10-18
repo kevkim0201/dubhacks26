@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 import urllib.parse
@@ -14,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.core.auth import AuthUser, OptionalAuthUser
 from app.core.config import get_settings
+from app.services import deal_checks
 from app.services.supabase import (
     SupabaseAPIError,
     SupabaseConfigurationError,
@@ -27,6 +29,7 @@ from app.services.supabase import (
 )
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
+log = logging.getLogger("checkout")
 
 DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 
@@ -285,7 +288,21 @@ def submit_decision(
         tag_decision(session_id, category=session.get("category"), item_name=session.get("item_name"))
     except (SupabaseConfigurationError, SupabaseUnavailable, SupabaseAPIError) as exc:
         raise _supabase_http_error(exc, "record your decision") from exc
-    return {**result, "category": session.get("category"), "item_name": session.get("item_name")}
+
+    # "Wait 24 hours": Pip re-checks prices when the wait is over (shown on the dashboard).
+    # Best effort; the decision is already saved and awarded.
+    scheduled = 0
+    if payload.decision == "save":
+        try:
+            scheduled = len(deal_checks.schedule(user.id, session_id, "wait"))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("could not schedule wait deal checks for %s: %r", session_id, exc)
+    return {
+        **result,
+        "category": session.get("category"),
+        "item_name": session.get("item_name"),
+        "deal_checks_scheduled": scheduled,
+    }
 
 
 class TranscriptEntry(BaseModel):

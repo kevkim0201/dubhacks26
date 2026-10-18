@@ -74,6 +74,10 @@ Avatar closet then offers a **Remove from Pip** action for equipped items.
 
 ## Existing Supabase project
 
+Run `migrations/20261018_deal_checks.sql` to add `deal_checks`: Pip's price checks after a
+conversation (run now after **Buy** if the user asks, or 24 hours after **Wait**; the dashboard
+runs due waits when it opens).
+
 Run `migrations/20261018_conversation_logging.sql` to add the conversation log
 columns (`page_url`, `transcript`, `duration_seconds`, `conversation_ended_at`)
 to `checkout_sessions`, then `migrations/20261018_purchase_category.sql` to add

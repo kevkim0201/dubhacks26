@@ -85,3 +85,42 @@ def test_heuristic_requires_model_number():
     ctx, [same, case] = ctx_with({"title": "Sony WH-1000XM5 Wireless Headphones Black", "price": 330}, {"title": "Sony WH-1000XM4 Headphones", "price": 200})
     picks = {p["offer_id"]: p["match_confidence"] for p in heuristic_picks(REQ, ctx)}
     assert same in picks and picks[same] >= 0.8 and case not in picks
+
+
+# ---------- similar picks (alternatives) ----------
+
+def test_alternatives_rules():
+    ctx, ids = ctx_with(
+        {"title": "Sony WH-1000XM5", "price": 347.99},                         # exact match
+        {"title": "Soundcore Space Q45", "price": 89.99},                      # good alternative
+        {"title": "Bose QC45", "price": 279.0},                                # good alternative, better fit
+        {"title": "JBL Tune 510", "price": 39.99},                             # weak fit
+        {"title": "Sennheiser Momentum 4 (Refurbished)", "price": 220, "condition": "refurbished"},
+        {"title": "Apple AirPods Max", "price": 549.0},                        # not cheaper
+    )
+    exact, q45, qc45, jbl, refurb, airpods = ids
+    r = build_response(
+        REQ,
+        [{"offer_id": exact, "match_confidence": 0.95}],
+        ctx,
+        alternative_picks=[
+            {"offer_id": q45, "fit_score": 0.8, "why": "Also noise cancelling", "tradeoff": "Plastic build"},
+            {"offer_id": qc45, "fit_score": 0.9, "why": "Great ANC for calls", "tradeoff": "Older model"},
+            {"offer_id": jbl, "fit_score": 0.5},
+            {"offer_id": refurb, "fit_score": 0.95},
+            {"offer_id": airpods, "fit_score": 0.95},
+            {"offer_id": exact, "fit_score": 0.99},          # already an exact match
+            {"offer_id": "o404", "fit_score": 0.99},          # no tool returned it
+        ],
+    )
+    assert [a.title for a in r.alternatives] == ["Bose QC45", "Soundcore Space Q45"]  # best fit first
+    assert r.alternatives[1].why == "Also noise cancelling" and r.alternatives[1].tradeoff == "Plastic build"
+    assert r.alternatives[0].savings == round(399.99 - 279.0, 2)
+    # Alternatives never change the verdict or acorns, which are about the exact item.
+    assert (r.verdict, r.max_savings, r.acorns) == ("overpriced", 52.0, 52)
+
+
+def test_alternatives_capped_at_three():
+    ctx, ids = ctx_with(*[{"title": f"Alt {i}", "price": 100 + i} for i in range(5)])
+    r = build_response(REQ, [], ctx, alternative_picks=[{"offer_id": i, "fit_score": 0.8} for i in ids])
+    assert len(r.alternatives) == 3 and r.verdict == "great_deal"

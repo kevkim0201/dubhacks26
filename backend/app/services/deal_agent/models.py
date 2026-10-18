@@ -23,6 +23,9 @@ class DealRequest(BaseModel):
     identifier: Identifier | None = None
     brand: str | None = Field(default=None, max_length=120)
     condition: str = Field(default="new", max_length=40)
+    # Optional: why the shopper wants it (e.g. from the Pip conversation). Steers "similar picks".
+    need: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=60)
 
     @property
     def current_total(self) -> float:
@@ -41,6 +44,23 @@ class Offer(BaseModel):
     reason: str = ""
 
 
+class Alternative(BaseModel):
+    """A different, cheaper product that meets the same need."""
+
+    title: str
+    seller: str
+    price: float
+    shipping: float = 0
+    total: float
+    savings: float
+    link: str
+    condition: str = "new"
+    fit_score: float = Field(ge=0, le=1)
+    why: str = ""  # why it meets the shopper's need
+    tradeoff: str = ""  # what you give up vs. the original
+    thumbnail: str | None = None
+
+
 class Coupon(BaseModel):
     code: str
     description: str
@@ -55,5 +75,7 @@ class DealResponse(BaseModel):
     max_savings: float
     acorns: int
     offers: list[Offer] = Field(default_factory=list)
+    # Different products that do the same job for less (not counted in verdict / savings / acorns).
+    alternatives: list[Alternative] = Field(default_factory=list)
     coupons: list[Coupon] = Field(default_factory=list)
     cached: bool = False

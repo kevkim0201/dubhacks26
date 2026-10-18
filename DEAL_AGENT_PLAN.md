@@ -85,6 +85,11 @@ Response:
       "reason": "Same model number and color"
     }
   ],
+  "alternatives": [
+    { "title": "Bose QuietComfort Headphones", "seller": "Best Buy", "price": 359.0, "shipping": 0, "total": 359.0,
+      "savings": 40.99, "link": "https://...", "condition": "new", "fit_score": 0.92,
+      "why": "Top-tier noise cancelling for calls", "tradeoff": "24h battery vs 30h", "thumbnail": null }
+  ],
   "coupons": [{ "code": "SAVE10", "description": "10% off", "source": "static" }],
   "cached": false
 }
@@ -192,6 +197,11 @@ backend/tests/test_deal_*.py, test_deals_api.py
 ```
 
 **Differences from the plan, and why**
+- **Similar picks (`alternatives`):** besides exact matches, the agent returns up to 3 *different*
+  products that meet the same need for less, each with `fit_score` (≥ 0.7 to be kept), `why`,
+  `tradeoff`, `title`, `thumbnail` and the usual price/total/savings/link. They don't change
+  `verdict`, `max_savings` or `acorns`, which stay about the exact item. Requests can pass an optional
+  `need` (why the shopper wants it) and `category`; deal checks fill these from the Pip conversation.
 - **Offers by id, not link:** search results get short ids (`o1`, `o2`, …) and the model answers with ids; code fills in the real link. Hallucinated links are impossible, and links are still checked against `seen_links`.
 - **Used/refurbished items are dropped in code** (not just by the prompt) unless the source item is used.
 - **Speed:** Gemini runs with `thinking_level=LOW`, tool calls in one turn run in parallel, and the last 5 s of the 20 s budget are reserved for the final answer. A live Sony WH-1000XM5 check took ~7.5 s.

@@ -28,31 +28,44 @@ from .verify import ModelJSONError, build_response, heuristic_picks, parse_model
 
 log = logging.getLogger("deal_agent")
 
-MAX_TOOL_CALLS = 6
+MAX_TOOL_CALLS = 8
 DEADLINE_S = 20.0
 # Stop calling tools when this much time is left, so Gemini can still give a real answer.
 ANSWER_RESERVE_S = 5.0
 
-SYSTEM_PROMPT = """You are Nook's deal hunter. The shopper is looking at one product. Find cheaper
-offers for the EXACT same item and report them.
+SYSTEM_PROMPT = """You are Nook's deal hunter, a frugal friend. The shopper is looking at one product.
+Do two things:
+1. EXACT matches: cheaper offers for the very same item.
+2. SIMILAR PICKS: different products that would meet the shopper's need just as well for less.
 
-Rules:
-- Match the exact product: same model number, variant, size, color and condition. Accessories,
-  bundles, cases, and used/refurbished/renewed items are NOT matches unless the source item has the
-  same condition.
-- Be fast. In your FIRST turn, call search_offers (brand + model number, or the identifier) AND
-  check_coupons for the source store's domain together.
-- Search at most twice. Only search again if the first results don't contain the item; refine the
-  query (add color/size, drop marketing words) and never repeat an identical query.
-- Check coupons for the domains of the 1–2 best offers in one turn (several calls at once is fine).
-- get_price_history usually returns null (no data); only call it alongside other tools.
-- You have at most 6 tool calls in total. Answer as soon as you are confident.
+Exact-match rules:
+- Same model number, variant, size, color and condition. Accessories, bundles, cases and
+  used/refurbished/renewed items are NOT exact matches (unless the source item is used too).
+
+Similar-pick rules:
+- Think about what the item is FOR. If a "need" is given (why the shopper wants it), use it: a pick
+  must serve that need. Otherwise infer the need from the product type.
+- Same kind of product and comparable quality/specs for that need (e.g. other noise-cancelling
+  over-ear headphones from reputable brands). Not accessories, not a lesser product category,
+  not used/refurbished, not obviously low-quality knockoffs.
+- Give each pick a fit_score (0-1: how well it meets the need), a short "why", and an honest
+  "tradeoff" vs. the original (e.g. "shorter battery life", "no app support").
+
+Searching:
+- Be fast. In your FIRST turn, call these together: search_offers for the exact item (brand + model
+  number or identifier), search_offers for the generic product type that meets the need (e.g.
+  "wireless noise cancelling headphones"), and check_coupons for the source store's domain.
+- At most one more search of each kind, only if results are weak. Never repeat an identical query.
+- get_price_history usually returns null; only call it alongside other tools.
+- You have at most 8 tool calls in total. Answer as soon as you are confident.
 
 When done, reply with JSON only, no prose:
 {"offers": [{"offer_id": "o3", "match_confidence": 0.93, "reason": "Same model number and color"}],
+ "alternatives": [{"offer_id": "o12", "fit_score": 0.85, "why": "Also noise cancelling, great for calls",
+                   "tradeoff": "20h battery instead of 30h"}],
  "verdict_reason": "One short, friendly sentence about whether this is a good deal."}
-Only use offer_id values that appeared in search_offers results. Include only offers you believe are
-the same item; give match_confidence between 0 and 1. If nothing cheaper matches, return "offers": []."""
+Only use offer_id values that appeared in search_offers results. Return [] for either list when
+nothing qualifies. Only include alternatives that cost less than the shopper's current total."""
 
 TOOLS = [
     types.Tool(
@@ -100,6 +113,8 @@ def _product_brief(req: DealRequest) -> str:
         "brand": req.brand,
         "condition": req.condition,
         "identifier": req.identifier.model_dump() if req.identifier else None,
+        "category": req.category,
+        "need": req.need,
     }
     return "Product the shopper is viewing:\n" + json.dumps(brief, indent=2)
 
@@ -233,7 +248,7 @@ async def run_deal_agent(req: DealRequest) -> AsyncIterator[dict]:
             yield result(unavailable_response(req, "shopping search is unavailable", ctx))
             return
         yield step("Double-checking the math...")
-        yield result(build_response(req, answer.get("offers") or [], ctx, answer.get("verdict_reason")))
+        yield result(build_response(req, answer.get("offers") or [], ctx, answer.get("verdict_reason"), answer.get("alternatives") or []))
 
     except (asyncio.TimeoutError, genai_errors.APIError, ModelJSONError) as exc:
         log.warning("deal agent fell back: %r", exc)

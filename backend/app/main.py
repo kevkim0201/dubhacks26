@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import checkout, cosmetics, deals, forest, health, impact, quests, users
+from app.routers import checkout, cosmetics, deal_checks, deals, forest, health, impact, quests, users
 
 settings = get_settings()
 
@@ -26,6 +26,7 @@ app.include_router(impact.router)
 app.include_router(quests.router)
 app.include_router(forest.router)
 app.include_router(deals.router)
+app.include_router(deal_checks.router)
 # Add new routers here: app.include_router(your_module.router)
 
 from pathlib import Path

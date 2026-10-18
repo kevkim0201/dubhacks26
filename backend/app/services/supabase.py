@@ -391,3 +391,73 @@ def count_conversations_since(user_id: str, since_iso: str) -> int:
     if not isinstance(rows, list):
         raise SupabaseUnavailable("Supabase returned an invalid session list")
     return len(rows)
+
+
+# ---------- deal checks (Pip looking for a better price after a conversation) ----------
+
+
+def get_owned_session(user_id: str, session_id: UUID) -> dict[str, Any]:
+    rows = _request(
+        "GET",
+        "checkout_sessions",
+        params={
+            "id": f"eq.{session_id}",
+            "user_id": f"eq.{user_id}",
+            "select": "id,store,cart_total,currency,items,page_url,item_name,category,reason_summary",
+            "limit": "1",
+        },
+    )
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseAPIError(404, "P0002", "Checkout session not found")
+    return rows[0]
+
+
+def insert_deal_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Inserts checks, skipping ones that already exist for the same session/trigger/item."""
+    if not rows:
+        return []
+    created = _request(
+        "POST",
+        "deal_checks",
+        params={"on_conflict": "session_id,trigger,item_name"},
+        payload=rows,
+        prefer="resolution=ignore-duplicates,return=representation",
+    )
+    return created if isinstance(created, list) else []
+
+
+def list_deal_checks(user_id: str, session_id: UUID | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    params = {"user_id": f"eq.{user_id}", "select": "*", "order": "created_at.desc", "limit": str(limit)}
+    if session_id:
+        params["session_id"] = f"eq.{session_id}"
+    rows = _request("GET", "deal_checks", params=params)
+    return rows if isinstance(rows, list) else []
+
+
+def get_deal_check(user_id: str, check_id: UUID) -> dict[str, Any]:
+    rows = _request("GET", "deal_checks", params={"id": f"eq.{check_id}", "user_id": f"eq.{user_id}", "select": "*", "limit": "1"})
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseAPIError(404, "P0002", "Deal check not found")
+    return rows[0]
+
+
+def claim_deal_check(user_id: str, check_id: UUID, now_iso: str, stale_before_iso: str) -> dict[str, Any] | None:
+    """Marks a due check as running. Also reclaims checks stuck in 'running' (e.g. the popup
+    closed mid-hunt). Returns the row, or None if it isn't due or someone else is running it."""
+    rows = _request(
+        "PATCH",
+        "deal_checks",
+        params={
+            "id": f"eq.{check_id}",
+            "user_id": f"eq.{user_id}",
+            "due_at": f"lte.{now_iso}",
+            "or": f"(status.in.(pending,failed),and(status.eq.running,started_at.lt.{stale_before_iso}))",
+        },
+        payload={"status": "running", "started_at": now_iso, "error": None},
+        prefer="return=representation",
+    )
+    return rows[0] if isinstance(rows, list) and rows else None
+
+
+def update_deal_check(user_id: str, check_id: UUID, patch: dict[str, Any]) -> None:
+    _request("PATCH", "deal_checks", params={"id": f"eq.{check_id}", "user_id": f"eq.{user_id}"}, payload=patch)

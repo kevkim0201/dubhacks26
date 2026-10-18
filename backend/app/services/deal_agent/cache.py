@@ -1,5 +1,6 @@
 """In-memory TTL cache for deal results, keyed by product identifier or normalized URL."""
 
+import hashlib
 import time
 from urllib.parse import urlsplit, urlunsplit
 
@@ -21,9 +22,11 @@ def normalize_url(url: str) -> str:
 
 
 def cache_key(req: DealRequest) -> str:
+    # The need changes the similar picks, so it's part of the key too.
+    need = hashlib.sha1((req.need or "").strip().lower().encode()).hexdigest()[:10]
     if req.identifier:
-        return f"{req.identifier.type}:{req.identifier.value.strip().lower()}|{req.currency}|{req.current_total:.2f}"
-    return f"url:{normalize_url(req.url)}|{req.currency}|{req.current_total:.2f}"
+        return f"{req.identifier.type}:{req.identifier.value.strip().lower()}|{req.currency}|{req.current_total:.2f}|{need}"
+    return f"url:{normalize_url(req.url)}|{req.currency}|{req.current_total:.2f}|{need}"
 
 
 def get(req: DealRequest) -> DealResponse | None:

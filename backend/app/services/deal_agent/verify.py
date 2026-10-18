@@ -6,10 +6,12 @@ import math
 import re
 
 from .context import AgentContext
-from .models import Coupon, DealRequest, DealResponse, Offer
+from .models import Alternative, Coupon, DealRequest, DealResponse, Offer
 
 MIN_CONFIDENCE = 0.8
 MAX_OFFERS = 5
+MIN_FIT = 0.7  # similar picks must clearly meet the same need
+MAX_ALTERNATIVES = 3
 USED_WORDS = ("used", "refurb", "renewed", "pre-owned", "open box", "second")
 
 
@@ -76,8 +78,43 @@ def _coupons(ctx: AgentContext) -> list[Coupon]:
     return out
 
 
-def build_response(req: DealRequest, picks: list[dict], ctx: AgentContext, verdict_reason: str | None = None) -> DealResponse:
-    """picks: [{offer_id | link, match_confidence, reason}] from the model (or the fallback matcher)."""
+def _alternatives(req: DealRequest, picks: list[dict], ctx: AgentContext, exact_links: set[str]) -> list[Alternative]:
+    """Different products that do the same job for less. Same tool-backed, new, cheaper rules."""
+    out: dict[str, Alternative] = {}
+    for pick in picks or []:
+        if not isinstance(pick, dict):
+            continue
+        raw = ctx.offers.get(str(pick.get("offer_id", "")))
+        if raw is None or raw["link"] not in ctx.seen_links or raw["link"] in exact_links:
+            continue
+        try:
+            fit = float(pick.get("fit_score", 0))
+        except (TypeError, ValueError):
+            continue
+        if fit < MIN_FIT or (_is_used(raw["condition"]) and not _is_used(req.condition)):
+            continue
+        total = round(raw["price"] + raw["shipping"], 2)
+        savings = round(req.current_total - total, 2)
+        if savings <= 0:
+            continue
+        out.setdefault(raw["link"], Alternative(
+            title=raw["title"], seller=raw["seller"], price=raw["price"], shipping=raw["shipping"], total=total,
+            savings=savings, link=raw["link"], condition=raw["condition"], fit_score=round(min(fit, 1.0), 2),
+            why=str(pick.get("why", ""))[:200], tradeoff=str(pick.get("tradeoff", ""))[:200], thumbnail=raw.get("thumbnail"),
+        ))
+    # Best fit first; among equally good fits, the bigger saving.
+    return sorted(out.values(), key=lambda a: (-a.fit_score, -a.savings))[:MAX_ALTERNATIVES]
+
+
+def build_response(
+    req: DealRequest,
+    picks: list[dict],
+    ctx: AgentContext,
+    verdict_reason: str | None = None,
+    alternative_picks: list[dict] | None = None,
+) -> DealResponse:
+    """picks: [{offer_id | link, match_confidence, reason}] from the model (or the fallback matcher).
+    alternative_picks: [{offer_id, fit_score, why, tradeoff}] for different products that meet the need."""
     current = req.current_total
     by_link = {o["link"]: o for o in ctx.offers.values()}
     offers: dict[str, Offer] = {}
@@ -127,6 +164,7 @@ def build_response(req: DealRequest, picks: list[dict], ctx: AgentContext, verdi
         max_savings=max_savings,
         acorns=math.floor(max_savings),
         offers=ranked,
+        alternatives=_alternatives(req, alternative_picks or [], ctx, {o.link for o in ranked}),
         coupons=_coupons(ctx),
     )
 
