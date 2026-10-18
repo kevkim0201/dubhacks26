@@ -1,4 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.core.auth import AuthUser
@@ -9,6 +11,7 @@ from app.services.supabase import (
     equip_cosmetic,
     get_avatar_state,
     purchase_cosmetic,
+    unequip_cosmetic,
 )
 
 router = APIRouter(prefix="/api/cosmetics", tags=["cosmetics"])
@@ -18,7 +21,17 @@ class CosmeticRequest(BaseModel):
     cosmetic_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")
 
 
+class UnequipRequest(BaseModel):
+    slot: Literal["background", "head", "neck", "held", "effect", "pet"]
+
+
 def _raise_api_error(exc: SupabaseAPIError) -> None:
+    if exc.code == "PGRST202":
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Supabase is missing the cosmetic unequip function. Apply "
+            "supabase/migrations/20261018_cosmetic_unequip.sql, then retry.",
+        ) from exc
     response_status = {
         "22023": status.HTTP_409_CONFLICT,
         "P0002": status.HTTP_404_NOT_FOUND,
@@ -57,6 +70,19 @@ def buy_cosmetic(payload: CosmeticRequest, user: AuthUser) -> dict:
 def wear_cosmetic(payload: CosmeticRequest, user: AuthUser) -> dict:
     try:
         result = equip_cosmetic(user.id, payload.cosmetic_id)
+        return {"result": result, **get_avatar_state(user.id)}
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    except SupabaseUnavailable as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    except SupabaseAPIError as exc:
+        _raise_api_error(exc)
+
+
+@router.post("/unequip", status_code=status.HTTP_200_OK)
+def remove_cosmetic(payload: UnequipRequest, user: AuthUser) -> dict:
+    try:
+        result = unequip_cosmetic(user.id, payload.slot)
         return {"result": result, **get_avatar_state(user.id)}
     except SupabaseConfigurationError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc

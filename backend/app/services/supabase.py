@@ -348,6 +348,17 @@ def equip_cosmetic(user_id: str, cosmetic_id: str) -> dict[str, Any]:
     return result
 
 
+def unequip_cosmetic(user_id: str, slot: str) -> dict[str, Any]:
+    result = _request(
+        "POST",
+        "rpc/unequip_cosmetic",
+        payload={"p_user_id": user_id, "p_slot": slot},
+    )
+    if not isinstance(result, dict):
+        raise SupabaseUnavailable("Supabase returned an invalid cosmetic unequip result")
+    return result
+
+
 def list_decisions_since(user_id: str, since_iso: str) -> list[dict[str, Any]]:
     rows = _request(
         "GET",

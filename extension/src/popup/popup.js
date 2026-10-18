@@ -741,7 +741,19 @@ app.addEventListener("click", (e) => {
     if (!button) return render();
   }
   if (button?.dataset.action === "open-page") {
-    chrome.tabs.create({ url: chrome.runtime.getURL(button.dataset.path) });
+    const url = chrome.runtime.getURL(button.dataset.path);
+    if (button.dataset.path === "avatar/index.html") {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+        if (!tab?.id) throw new Error("Couldn't find the current browser tab.");
+        return chrome.tabs.update(tab.id, { url });
+      }).catch((err) => {
+        console.error(err);
+        state.error = err?.message ?? String(err);
+        render();
+      });
+    } else {
+      chrome.tabs.create({ url });
+    }
     return render();
   }
   if (!button || button.disabled) return;

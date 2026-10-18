@@ -55,6 +55,11 @@ after the recommendation rewards migration. The closet then loads the signed-in 
 acorn balance and cosmetics; purchases and equipment are saved to the account and used to
 render Pip in the popup, dashboard, and checkout overlay.
 
+To add floating pet companions to the closet, apply
+`supabase/migrations/20261018_pet_cosmetics.sql` after the avatar cosmetics migration.
+To let users remove equipped items without losing ownership, apply
+`supabase/migrations/20261018_cosmetic_unequip.sql` and restart the backend.
+
 ### Trying the checkout flow
 
 ```bash

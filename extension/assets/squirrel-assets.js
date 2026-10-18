@@ -354,6 +354,74 @@ export const EFFECTS = {
     .map(([x, y], i) => `<g class="fx-glow" style="animation-delay:${i * .45}s"><circle cx="${x}" cy="${y}" r="7" fill="#F7E36A" opacity=".35"/><circle cx="${x}" cy="${y}" r="2.6" fill="#FFF6B0"/></g>`).join('') },
 };
 
+/* ---------------------------------------------------------------- pets */
+
+const petFace = (fur, muzzle = '#FFF2DE') => `
+  <ellipse cx="20" cy="26" rx="12" ry="10" fill="${fur}"/>
+  <ellipse cx="20" cy="23" rx="10" ry="9" fill="${fur}"/>
+  <ellipse cx="20" cy="27" rx="7" ry="4.5" fill="${muzzle}"/>
+  <circle cx="16.5" cy="22.5" r="1.7" fill="#33251D"/>
+  <circle cx="23.5" cy="22.5" r="1.7" fill="#33251D"/>
+  <circle cx="17" cy="22" r=".55" fill="#FFF"/>
+  <circle cx="24" cy="22" r=".55" fill="#FFF"/>
+  <ellipse cx="20" cy="26" rx="1.5" ry="1" fill="#704433"/>
+  <path d="M18.5 28 Q20 29.5 21.5 28" fill="none" stroke="#704433" stroke-width=".8" stroke-linecap="round"/>
+  <ellipse cx="12.5" cy="26" rx="2" ry="1.3" fill="#F49A9A" opacity=".65"/>
+  <ellipse cx="27.5" cy="26" rx="2" ry="1.3" fill="#F49A9A" opacity=".65"/>`;
+
+export const PETS = {
+  none: { name: 'No pet', draw: () => '' },
+  bunny: { name: 'Bunny', draw: () => `
+    <ellipse cx="15" cy="12" rx="4" ry="11" fill="#F5E8DC" transform="rotate(-12 15 12)"/>
+    <ellipse cx="25" cy="12" rx="4" ry="11" fill="#F5E8DC" transform="rotate(12 25 12)"/>
+    <ellipse cx="15" cy="12" rx="1.7" ry="7" fill="#F3B8C2" transform="rotate(-12 15 12)"/>
+    <ellipse cx="25" cy="12" rx="1.7" ry="7" fill="#F3B8C2" transform="rotate(12 25 12)"/>
+    ${petFace('#E9D8C8')}` },
+  chick: { name: 'Chick', draw: () => `
+    <path d="M20 5 L16 1 L21 3 L25 1 L24 6Z" fill="#E89A38"/>
+    <ellipse cx="20" cy="20" rx="14" ry="13" fill="#F7D35D"/>
+    <ellipse cx="10" cy="22" rx="4" ry="6" fill="#EFC24D" transform="rotate(-25 10 22)"/>
+    <ellipse cx="30" cy="22" rx="4" ry="6" fill="#EFC24D" transform="rotate(25 30 22)"/>
+    <circle cx="16" cy="19" r="1.8" fill="#33251D"/><circle cx="24" cy="19" r="1.8" fill="#33251D"/>
+    <circle cx="16.5" cy="18.5" r=".6" fill="#FFF"/><circle cx="24.5" cy="18.5" r=".6" fill="#FFF"/>
+    <path d="M17 23 Q20 27 23 23Z" fill="#E98542"/>
+    <ellipse cx="14" cy="23" rx="2" ry="1.3" fill="#F49A9A"/><ellipse cx="26" cy="23" rx="2" ry="1.3" fill="#F49A9A"/>` },
+  turtle: { name: 'Turtle', draw: () => `
+    <ellipse cx="20" cy="23" rx="14" ry="10" fill="#70A86B"/>
+    <path d="M8 22 Q8 10 20 10 Q32 10 32 22Z" fill="#8B684A"/>
+    <path d="M12 20 Q13 12 20 12 Q27 12 28 20Z" fill="#B98558"/>
+    <path d="M16 15 L20 20 L24 15 M13 20 H27" fill="none" stroke="#8B684A" stroke-width="1.4"/>
+    <circle cx="9" cy="29" r="4" fill="#70A86B"/><circle cx="31" cy="29" r="4" fill="#70A86B"/>
+    <ellipse cx="34" cy="21" rx="5.5" ry="5" fill="#8FC27B"/>
+    <circle cx="35" cy="19.5" r="1.7" fill="#33251D"/>
+    <circle cx="35.5" cy="19" r=".55" fill="#FFF"/>
+    <ellipse cx="37.5" cy="23" rx="1.6" ry="1" fill="#F49A9A" opacity=".75"/>
+    <path d="M33 24 Q35 26 37 24" fill="none" stroke="#5A754A" stroke-width=".8" stroke-linecap="round"/>
+    <path d="M4 21 L1 19 L2 24Z" fill="#70A86B"/>` },
+  fox: { name: 'Fox', draw: () => `
+    <path d="M8 20 L7 5 L18 12 L22 12 L33 5 L32 20Z" fill="#D97946"/>
+    <path d="M11 14 L10 8 L17 13Z M29 14 L30 8 L23 13Z" fill="#F5C7B8"/>
+    <ellipse cx="20" cy="23" rx="13" ry="11" fill="#D97946"/>
+    <path d="M9 23 Q20 19 31 23 L27 31 Q20 35 13 31Z" fill="#FFF0DC"/>
+    <circle cx="16" cy="21" r="1.8" fill="#33251D"/><circle cx="24" cy="21" r="1.8" fill="#33251D"/>
+    <circle cx="16.5" cy="20.5" r=".6" fill="#FFF"/><circle cx="24.5" cy="20.5" r=".6" fill="#FFF"/>
+    <ellipse cx="11.5" cy="25" rx="1.8" ry="1.2" fill="#F49A9A" opacity=".65"/><ellipse cx="28.5" cy="25" rx="1.8" ry="1.2" fill="#F49A9A" opacity=".65"/>
+    <ellipse cx="20" cy="26" rx="2" ry="1.5" fill="#55352C"/>
+    <path d="M18 28 Q20 30 22 28" stroke="#704433" stroke-width="1" fill="none"/>` },
+  otter: { name: 'Otter', draw: () => `
+    <path d="M9 27 Q1 31 5 35 Q11 36 15 30" fill="none" stroke="#8A5B3D" stroke-width="5" stroke-linecap="round"/>
+    <ellipse cx="20" cy="25" rx="12" ry="10" fill="#9B6847"/>
+    <circle cx="12" cy="13" r="4" fill="#9B6847"/><circle cx="28" cy="13" r="4" fill="#9B6847"/>
+    <circle cx="12" cy="13" r="1.8" fill="#EABEA5"/><circle cx="28" cy="13" r="1.8" fill="#EABEA5"/>
+    <ellipse cx="20" cy="20" rx="11" ry="10" fill="#A87551"/>
+    <ellipse cx="20" cy="24" rx="7" ry="5" fill="#F4E2CF"/>
+    <circle cx="16" cy="19" r="1.7" fill="#33251D"/><circle cx="24" cy="19" r="1.7" fill="#33251D"/>
+    <circle cx="16.5" cy="18.5" r=".55" fill="#FFF"/><circle cx="24.5" cy="18.5" r=".55" fill="#FFF"/>
+    <ellipse cx="12" cy="24" rx="1.8" ry="1.2" fill="#F49A9A" opacity=".65"/><ellipse cx="28" cy="24" rx="1.8" ry="1.2" fill="#F49A9A" opacity=".65"/>
+    <ellipse cx="20" cy="23" rx="1.6" ry="1.2" fill="#55352C"/>
+    <path d="M17 26 Q20 28 23 26" stroke="#704433" stroke-width="1" fill="none"/>` },
+};
+
 /* ---------------------------------------------------------- backgrounds */
 // 240 x 200, ground line around y=184.
 
@@ -459,6 +527,7 @@ export const CATALOG = {
   neck: NECK,
   held: HELD,
   effects: EFFECTS,
+  pets: PETS,
 };
 
 const DEFS = `<defs><linearGradient id="sq-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6CC5A"/><stop offset="1" stop-color="#D99A26"/></linearGradient></defs>`;
@@ -468,7 +537,7 @@ const DEFS = `<defs><linearGradient id="sq-gold" x1="0" y1="0" x2="0" y2="1"><st
  * opts: { level 1-5, background, head, neck, held, effect, label }
  */
 export function renderScene(opts = {}) {
-  const { level = 1, background = 'meadow', effect = 'none', label } = opts;
+  const { level = 1, background = 'meadow', effect = 'none', pet = 'none', label } = opts;
   const L = LEVELS[level - 1];
   const s = L.scale;
   const bg = (BACKGROUNDS[background] || BACKGROUNDS.meadow).draw();
@@ -480,24 +549,26 @@ export function renderScene(opts = {}) {
   <g transform="translate(120 186) scale(${s}) translate(-92 -182)">
     ${squirrelBody(level, opts)}
   </g>
+  ${pet !== 'none' && PETS[pet] ? `<g transform="translate(26 128) scale(1.02)"><g class="sq-pet-float">${PETS[pet].draw()}</g></g>` : ''}
   ${(EFFECTS[effect] || EFFECTS.none).draw()}
 </svg>`;
 }
 
 /** Squirrel only, transparent background (for the popup or overlay). */
 export function renderSquirrel(opts = {}) {
-  const { level = 1 } = opts;
+  const { level = 1, pet = 'none' } = opts;
   const s = LEVELS[level - 1].scale;
   return `<svg class="sq-scene" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${LEVELS[level - 1].name} squirrel">
   ${DEFS}
   <ellipse cx="120" cy="187" rx="${48 * s}" ry="${6 * s}" fill="#000" opacity=".13"/>
   <g transform="translate(120 186) scale(${s}) translate(-92 -182)">${squirrelBody(level, opts)}</g>
+  ${pet !== 'none' && PETS[pet] ? `<g transform="translate(26 128) scale(1.02)"><g class="sq-pet-float">${PETS[pet].draw()}</g></g>` : ''}
   ${opts.effect ? (EFFECTS[opts.effect] || EFFECTS.none).draw() : ''}
 </svg>`;
 }
 
 /** A single catalog item on its own (for shop tiles). viewBox is a sensible default per category. */
-const ITEM_VIEW = { head: '30 0 120 120', neck: '30 90 120 100', held: '58 84 64 64', effects: '20 0 200 160', backgrounds: '0 0 240 200' };
+const ITEM_VIEW = { head: '30 0 120 120', neck: '30 90 120 100', held: '58 84 64 64', effects: '20 0 200 160', backgrounds: '0 0 240 200', pets: '0 0 40 40' };
 export function renderItem(category, id) {
   const item = CATALOG[category]?.[id];
   if (!item) return '';
@@ -517,6 +588,7 @@ export const SCENE_CSS = `
 .sq-scene .fx-fall{animation:fx-fall 6s linear infinite}
 .sq-scene .fx-glow{animation:fx-glow 2.2s ease-in-out infinite}
 .sq-scene .fx-steam{animation:fx-steam 2s ease-in-out infinite}
+.sq-scene .sq-pet-float{animation:sq-pet-float 2.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
 @keyframes sq-bob{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-4px) scaleY(1.015)}}
 @keyframes sq-sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(5deg)}}
 @keyframes sq-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
@@ -527,5 +599,6 @@ export const SCENE_CSS = `
 @keyframes fx-fall{0%{transform:translate(0,0) rotate(0)}50%{transform:translate(10px,105px) rotate(120deg)}100%{transform:translate(-6px,215px) rotate(260deg)}}
 @keyframes fx-glow{0%,100%{opacity:.25;transform:translate(0,0)}50%{opacity:1;transform:translate(3px,-4px)}}
 @keyframes fx-steam{0%,100%{opacity:.25;transform:translateY(2px)}50%{opacity:.85;transform:translateY(-2px)}}
+@keyframes sq-pet-float{0%,100%{transform:translate(0,2px) rotate(-3deg)}50%{transform:translate(3px,-5px) rotate(4deg)}}
 @media (prefers-reduced-motion:reduce){.sq-scene *{animation:none!important}}
 `;

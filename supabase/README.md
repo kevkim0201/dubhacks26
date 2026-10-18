@@ -63,6 +63,15 @@ RPCs for atomic purchases and equipment changes. The extension reads the
 authenticated user's `/api/cosmetics` state and uses it to render Pip in the
 closet, popup, dashboard, and checkout overlay.
 
+To add the floating pet shop category, apply
+`migrations/20261018_pet_cosmetics.sql` after the avatar cosmetics migration.
+Pet purchases and equipment use the same authenticated cosmetics API and are
+saved in the `pet` equipment slot.
+
+To let users remove the equipped item in any slot without losing ownership,
+apply `migrations/20261018_cosmetic_unequip.sql` and restart the backend. The
+Avatar closet then offers a **Remove from Pip** action for equipped items.
+
 ## Existing Supabase project
 
 Run `migrations/20261018_conversation_logging.sql` to add the conversation log

@@ -30,3 +30,10 @@ export function equipCosmetic(cosmeticId) {
     body: JSON.stringify({ cosmetic_id: cosmeticId }),
   }).then(cacheState);
 }
+
+export function unequipCosmetic(slot) {
+  return apiFetch("/api/cosmetics/unequip", {
+    method: "POST",
+    body: JSON.stringify({ slot }),
+  }).then(cacheState);
+}
