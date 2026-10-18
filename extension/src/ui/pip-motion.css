@@ -1,0 +1,115 @@
+/* Pip's live poses during a voice conversation. An ancestor sets
+   data-pip-mood="speaking|listening|thinking|muted" plus the CSS variables
+   --mouth (Pip's voice level, 0–1) and --voice (the user's voice level, 0–1). */
+
+/* Speaking: mouth follows his voice (base rule in SCENE_CSS); head bobs a little. */
+[data-pip-mood="speaking"] .sq-scene .sq-head {
+  transform: translateY(calc(var(--mouth, 0) * 1.5px)) rotate(calc(var(--mouth, 0) * 2deg));
+}
+
+/* No volume data (local fallback voice): chatter on a loop instead. */
+[data-pip-mood="speaking"][data-pip-auto] .sq-scene .sq-mouth-open {
+  opacity: 1;
+  animation: sq-chatter 0.18s ease-in-out infinite alternate;
+}
+
+/* Listening: ears perk up, head tilts toward you and nods with your voice. */
+[data-pip-mood="listening"] .sq-scene .sq-perk-l {
+  transform: translateY(-2px) rotate(-9deg);
+}
+[data-pip-mood="listening"] .sq-scene .sq-perk-r {
+  transform: translateY(-2px) rotate(9deg);
+}
+[data-pip-mood="listening"] .sq-scene .sq-head {
+  transform: rotate(-7deg) translateY(calc(var(--voice, 0) * 4px));
+  transition-duration: 0.12s;
+}
+
+/* Thinking: head tilts the other way, eyes glance up, thought bubble shows. */
+[data-pip-mood="thinking"] .sq-scene .sq-head {
+  transform: rotate(6deg);
+}
+[data-pip-mood="thinking"] .sq-scene .sq-eyes {
+  transform: translate(3px, -3px);
+}
+
+/* Muted: ears droop and he settles. */
+[data-pip-mood="muted"] .sq-scene .sq-perk-l {
+  transform: translateY(2px) rotate(14deg);
+}
+[data-pip-mood="muted"] .sq-scene .sq-perk-r {
+  transform: translateY(2px) rotate(-14deg);
+}
+[data-pip-mood="muted"] .sq-scene .sq-head {
+  transform: translateY(2px);
+}
+
+/* Thought bubble over Pip's head. */
+.pip-stage {
+  position: relative;
+}
+
+.think-bubble {
+  position: absolute;
+  top: 8%;
+  right: 22%;
+  display: flex;
+  gap: 4px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--card, #fff);
+  box-shadow: 0 4px 14px rgb(40 58 47 / 0.15);
+  opacity: 0;
+  transform: translateY(6px) scale(0.8);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+}
+
+.think-bubble::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  bottom: -7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.think-bubble span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green, #2f4f3e);
+  animation: think-dot 1.2s ease-in-out infinite;
+}
+
+.think-bubble span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.think-bubble span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+[data-pip-mood="thinking"] .think-bubble {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes think-dot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .think-bubble span {
+    animation: none;
+  }
+}

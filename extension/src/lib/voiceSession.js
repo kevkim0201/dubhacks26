@@ -3,16 +3,37 @@ import { apiFetch } from "./api.js";
 
 const ELEVENLABS_AGENT_ID = "agent_4801m56k1bnffh1sfrwk9a90dvry";
 
+const MIC_TIMEOUT_MS = 10_000;
+const CONNECT_TIMEOUT_MS = 12_000;
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Starts a live voice conversation with Pip at checkout and sends the final JSON verdict to FastAPI.
  * @param {Object} cart - { items: "Pro Over-Ear Gym Headphones", total: "eighty-nine dollars", sessionId, startedAt }
  *   sessionId (from POST /api/checkout/start) makes the backend save the verdict + transcript on that session.
- * @param {Object} callbacks - Optional UI hooks: { onTranscript, onModeChange, onVerdict, onEnd, onError }
+ * @param {Object} callbacks - Optional UI hooks: { onStatus, onTranscript, onModeChange, onVerdict, onEnd, onError }
+ *   onStatus("mic" | "connecting" | "retrying") reports which connect step is running.
  *   onEnd({ byAgent, verdict }) fires once the call is over and the verdict request has finished.
  */
 export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
-  // 1. Request microphone permission from the browser
-  await navigator.mediaDevices.getUserMedia({ audio: true });
+  // 1. Microphone permission. Extension popups sometimes can't show Chrome's prompt and
+  //    the request just waits, so give up after a while and ask for it in a tab instead.
+  callbacks.onStatus?.("mic");
+  const probe = await withTimeout(
+    navigator.mediaDevices.getUserMedia({ audio: true }),
+    MIC_TIMEOUT_MS,
+    "Microphone permission timed out. Allow mic access in a tab, then try again."
+  );
+  probe.getTracks().forEach((track) => track.stop()); // the SDK opens its own stream
 
   const cartItems = typeof cart.items === "string" ? cart.items : JSON.stringify(cart.items || "empty");
   const cartTotal = String(cart.total || "empty");
@@ -61,7 +82,7 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
   console.log(`[ElevenLabs API] Dynamic variables:`, { cart_items: cartItems, cart_total: cartTotal });
 
   // 2. Start live WebSocket session with your ElevenLabs Agent
-  const conversation = await Conversation.startSession({
+  const sessionOptions = {
     agentId: ELEVENLABS_AGENT_ID,
     dynamicVariables: {
       cart_items: cartItems,
@@ -98,7 +119,29 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
       console.error("[ElevenLabs Error] ❌", err);
       callbacks.onError?.(err);
     },
-  });
+  };
+
+  // 2. Connect. Voice defaults to WebRTC (LiveKit), which can stall on some networks;
+  //    if it doesn't connect in time, retry over a plain WebSocket.
+  async function connect(connectionType) {
+    const pending = Conversation.startSession({ ...sessionOptions, connectionType });
+    try {
+      return await withTimeout(pending, CONNECT_TIMEOUT_MS, `Pip didn't connect (${connectionType}) in time.`);
+    } catch (err) {
+      pending.then((late) => late.endSession()).catch(() => {}); // don't leave a late session open
+      throw err;
+    }
+  }
+
+  callbacks.onStatus?.("connecting");
+  let conversation;
+  try {
+    conversation = await connect("webrtc");
+  } catch (err) {
+    console.warn("[ElevenLabs] WebRTC connect failed, retrying over WebSocket:", err);
+    callbacks.onStatus?.("retrying");
+    conversation = await connect("websocket");
+  }
 
   return {
     conversation,

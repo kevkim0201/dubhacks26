@@ -9,6 +9,7 @@ import { API_BASE_URL } from "../lib/config.js";
 import { apiFetch } from "../lib/api.js";
 import { voiceEngine } from "../lib/voice.js";
 import { startSquirrelVoiceSession } from "../lib/voiceSession.js";
+import { startPipMotion } from "../ui/pip-motion.js";
 
 const app = document.getElementById("app");
 
@@ -38,6 +39,8 @@ const state = {
   micBlocked: false,
   grantMicStatus: null,
   activeVoiceSession: null,
+  pipMood: "thinking", // live pose while talking; kept here so re-renders keep it
+  stopPipMotion: null,
 };
 
 voiceEngine.onStateChange = ({ isSpeaking, isListening }) => {
@@ -149,7 +152,10 @@ const screens = {
         <span><span class="dot"></span>Talk to Pip (Eleven Turbo)</span>
         <span id="timer">${formatTime(elapsedSeconds())}</span>
       </div>
-      <div class="art">${squirrel({ scarf: hasScarf() })}</div>
+      <div class="art pip-stage" data-pip-mood="${state.pipMood}">
+        ${squirrel({ scarf: hasScarf() })}
+        <div class="think-bubble" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
       <div class="wave ${state.micOn && (state.speaking || state.listening) ? "" : "paused"}" aria-hidden="true">
         ${Array.from({ length: 11 }, (_, i) => `<span style="animation-delay:${(i % 5) * 0.12}s"></span>`).join("")}
       </div>
@@ -448,11 +454,21 @@ async function startConversation() {
     }, 1000);
 
     go("conversation");
+    animatePip();
 
     try {
       state.activeVoiceSession = await startSquirrelVoiceSession(
         { items: cartItems, total: cartTotal, sessionId: state.checkoutSessionId, startedAt: state.startedAt },
         {
+          onStatus: (step) => {
+            state.subtitle = {
+              mic: "Checking your microphone…",
+              connecting: "Connecting with Pip…",
+              retrying: "Still connecting… trying another way",
+            }[step];
+            const qEl = document.getElementById("pip-quote");
+            if (qEl) qEl.textContent = state.subtitle;
+          },
           onTranscript: (entry) => {
             if (entry.role === "squirrel") {
               state.subtitle = entry.text;
@@ -538,6 +554,36 @@ async function startConversation() {
     state.busy = false;
     if (state.screen !== "conversation") render();
   }
+}
+
+// Pip reacts to the call: mouth follows his voice, ears perk and he nods while you
+// talk, and he looks up "thinking" between turns. Stops when you leave the call.
+function animatePip() {
+  state.stopPipMotion?.();
+  const stop = startPipMotion(
+    () => {
+      if (state.screen !== "conversation") {
+        stop();
+        state.stopPipMotion = null;
+        return null;
+      }
+      return document.querySelector(".pip-stage");
+    },
+    () => {
+      const conv = state.activeVoiceSession?.conversation;
+      const live = typeof conv?.getOutputVolume === "function";
+      return {
+        speaking: state.speaking,
+        listening: state.listening,
+        micOn: state.micOn,
+        connecting: !conv && !state.speaking && !state.listening,
+        outputVolume: live ? conv.getOutputVolume() : null,
+        inputVolume: live ? conv.getInputVolume() : null,
+      };
+    },
+    (mood) => (state.pipMood = mood)
+  );
+  state.stopPipMotion = stop;
 }
 
 // Stops the call (if it's still live) and shows Pip's verdict with buy / wait / skip.

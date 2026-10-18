@@ -553,8 +553,15 @@ body.nook {
 
 table {
   width: 100%;
+  min-width: 560px; /* below this the wrapper scrolls instead of squashing columns */
   border-collapse: collapse;
+  table-layout: fixed; /* long names can't widen the table */
 }
+
+col.col-date { width: 64px; }
+col.col-cart { width: 88px; }
+col.col-decision { width: 124px; }
+col.col-saved { width: 88px; }
 
 th {
   padding: 8px 0;
@@ -611,11 +618,29 @@ td.empty {
 
 .purchase div {
   display: grid;
+  min-width: 0;
+}
+
+td.purchase-cell {
+  white-space: normal;
+}
+
+/* Long product names wrap to two lines, then end with "…" (full name on hover). */
+.purchase strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
 }
 
 .purchase span {
+  overflow: hidden;
   font-size: 11px;
   color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pill-outcome {

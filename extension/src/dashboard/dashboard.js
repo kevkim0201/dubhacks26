@@ -214,8 +214,8 @@ function decisionsTable() {
     .map(
       (d) => `
       <tr>
-        <td>
-          <div class="purchase">
+        <td class="purchase-cell">
+          <div class="purchase" title="${escape(d.name)} · ${escape(d.store)}">
             ${d.image ? `<img src="${escape(d.image)}" alt="" referrerpolicy="no-referrer" />` : `<span class="purchase-icon">${icons.bag(16)}</span>`}
             <div><strong>${escape(d.name)}</strong><span>${escape(d.store)}</span></div>
           </div>
@@ -242,6 +242,7 @@ function decisionsTable() {
       </div>
       <div class="table-wrap">
         <table>
+          <colgroup><col /><col class="col-date" /><col class="col-cart" /><col class="col-decision" /><col class="col-saved" /></colgroup>
           <thead><tr><th>Purchase</th><th>Date</th><th>Cart</th><th>Your decision</th><th class="num">Est. saved</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="5" class="empty">No ${state.outcome === "all" ? "" : OUTCOME_LABEL[state.outcome].toLowerCase() + " "}decisions in this range.</td></tr>`}</tbody>
         </table>

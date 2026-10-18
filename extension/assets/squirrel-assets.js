@@ -61,8 +61,10 @@ function squirrelBody(level, eq) {
   const heldItem = held ? HELD[held].draw() : acorn(90, 122, level === 4 || level === 5 ? 1.45 : 1.05);
   const back = neck && NECK[neck].back ? NECK[neck].back() : (builtInSatchel ? '' : '');
 
+  // sq-react / sq-head / sq-perk-* / sq-eyes / sq-mouth-open are motion hooks driven by
+  // CSS variables (--mouth, --voice) and a data-pip-mood attribute on an ancestor.
   return `
-  <g class="sq-bob">
+  <g class="sq-react"><g class="sq-bob">
     <g class="sq-tail">
       <path d="M104 164 C126 184 188 172 188 114 C188 70 160 50 132 56 C104 62 98 92 112 104 C102 122 98 146 104 164Z" fill="${fur}"/>
       <path d="M118 158 C150 166 178 140 176 108 C174 80 152 66 134 72 C118 77 116 96 128 102 C138 107 148 99 144 90" stroke="${c.tail}" stroke-width="10" stroke-linecap="round" fill="none"/>
@@ -74,32 +76,37 @@ function squirrelBody(level, eq) {
     <ellipse cx="76" cy="177" rx="12" ry="6" fill="${c.dark}"/>
     <ellipse cx="108" cy="177" rx="12" ry="6" fill="${c.dark}"/>
     ${builtInSatchel}
-    <g>
+    <g class="sq-head">
+    <g class="sq-perk-l">
       <path d="M64 64 L58 30 Q72 34 82 54 Z" fill="${fur}"/>
       <path d="M58 30 Q56 22 61 18 Q62 26 64 31Z" fill="${c.dark}"/>
       <path d="M66 59 L62 40 Q71 44 77 54 Z" fill="${c.cream}"/>
     </g>
-    <g class="sq-ear">
+    <g class="sq-perk-r"><g class="sq-ear">
       <path d="M100 52 L114 22 Q124 38 118 62 Z" fill="${fur}"/>
       <path d="M114 22 Q117 14 122 12 Q120 20 117 26Z" fill="${c.dark}"/>
       <path d="M104 52 L113 33 Q119 44 116 57 Z" fill="${c.cream}"/>
-    </g>
+    </g></g>
     <circle cx="90" cy="84" r="34" fill="${fur}"/>
     ${level >= 4 ? `<ellipse cx="78" cy="66" rx="10" ry="5" fill="#FFF" opacity=".2" transform="rotate(-20 78 66)"/>` : ''}
     <ellipse cx="90" cy="98" rx="16" ry="11" fill="${c.cream}"/>
-    <g class="sq-eye"><circle cx="77" cy="86" r="5.6" fill="#2A1D14"/><circle cx="78.9" cy="84.2" r="1.9" fill="#FFF"/></g>
-    <g class="sq-eye"><circle cx="103" cy="86" r="5.6" fill="#2A1D14"/><circle cx="104.9" cy="84.2" r="1.9" fill="#FFF"/></g>
+    <g class="sq-eyes">
+      <g class="sq-eye"><circle cx="77" cy="86" r="5.6" fill="#2A1D14"/><circle cx="78.9" cy="84.2" r="1.9" fill="#FFF"/></g>
+      <g class="sq-eye"><circle cx="103" cy="86" r="5.6" fill="#2A1D14"/><circle cx="104.9" cy="84.2" r="1.9" fill="#FFF"/></g>
+    </g>
     <ellipse cx="68" cy="97" rx="5.5" ry="3.3" fill="#F28C8C" opacity=".55"/>
     <ellipse cx="112" cy="97" rx="5.5" ry="3.3" fill="#F28C8C" opacity=".55"/>
     <ellipse cx="90" cy="94" rx="3.4" ry="2.5" fill="#5A3420"/>
+    <ellipse class="sq-mouth-open" cx="90" cy="101" rx="4.4" ry="4" fill="#5A3420"/>
     <path d="M85.5 99.5 Q90 103.5 94.5 99.5" stroke="#5A3420" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    </g>
     ${neck ? NECK[neck].draw() : builtInNeck}
     <ellipse cx="78" cy="138" rx="7.5" ry="6.5" fill="${c.dark}"/>
     <ellipse cx="102" cy="138" rx="7.5" ry="6.5" fill="${c.dark}"/>
     ${neck === 'sweater' ? NECK.sweater.cuffs() : ''}
     <g transform="translate(0 10)">${heldItem}</g>
-    ${head ? HEAD[head].draw() : builtInHead}
-  </g>`;
+    <g class="sq-head">${head ? HEAD[head].draw() : builtInHead}</g>
+  </g></g>`;
 }
 
 // Level extras that live on the ground beside the squirrel (scene frame).
@@ -527,5 +534,12 @@ export const SCENE_CSS = `
 @keyframes fx-fall{0%{transform:translate(0,0) rotate(0)}50%{transform:translate(10px,105px) rotate(120deg)}100%{transform:translate(-6px,215px) rotate(260deg)}}
 @keyframes fx-glow{0%,100%{opacity:.25;transform:translate(0,0)}50%{opacity:1;transform:translate(3px,-4px)}}
 @keyframes fx-steam{0%,100%{opacity:.25;transform:translateY(2px)}50%{opacity:.85;transform:translateY(-2px)}}
-@media (prefers-reduced-motion:reduce){.sq-scene *{animation:none!important}}
+.sq-scene .sq-react{transform-box:view-box;transform-origin:92px 182px;transform:translateY(calc(var(--mouth,0) * -3px)) scale(calc(1 + var(--mouth,0) * .015),calc(1 + var(--mouth,0) * .03));transition:transform .08s linear}
+.sq-scene .sq-head{transform-box:view-box;transform-origin:90px 118px;transition:transform .35s cubic-bezier(.3,1.5,.5,1)}
+.sq-scene .sq-perk-l{transform-box:view-box;transform-origin:70px 62px;transition:transform .3s cubic-bezier(.3,1.6,.5,1)}
+.sq-scene .sq-perk-r{transform-box:view-box;transform-origin:108px 60px;transition:transform .3s cubic-bezier(.3,1.6,.5,1)}
+.sq-scene .sq-eyes{transition:transform .3s ease}
+.sq-scene .sq-mouth-open{transform-box:fill-box;transform-origin:50% 0;transform:scaleY(var(--mouth,0));opacity:calc(var(--mouth,0) * 4);transition:transform .06s linear}
+@keyframes sq-chatter{0%{transform:scaleY(.1)}100%{transform:scaleY(.8)}}
+@media (prefers-reduced-motion:reduce){.sq-scene *{animation:none!important;transition:none!important}}
 `;
