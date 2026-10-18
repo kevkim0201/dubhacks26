@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     cors_origins: str = ""
 
+    # Reward timing, in seconds (see app/rewards/settle.py). Shorten for demos.
+    reward_skip_lock_seconds: int = 7 * 24 * 3600   # skip acorns pay out after this
+    reward_save_bonus_seconds: int = 48 * 3600      # saved item bought after this earns a bonus
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
