@@ -297,16 +297,26 @@ async function enterApp(session, intent) {
 }
 
 async function handleUserTurn(transcript) {
-  state.userTranscript = transcript;
+  if (!transcript || !transcript.trim()) return;
+  const cleanText = transcript.trim();
+  voiceEngine.stopListening();
+
+  state.userTranscript = cleanText;
   const tEl = document.getElementById("user-transcript-live");
-  if (tEl) tEl.textContent = `You: “${transcript}”`;
+  if (tEl) tEl.textContent = `You: “${cleanText}”`;
+
+  const statusEl = document.getElementById("conv-status-text");
+  if (statusEl) {
+    statusEl.className = "conversation-status paused";
+    statusEl.textContent = "🤔 Pip is thinking…";
+  }
 
   try {
     const rawTotal = String(state.checkout?.total ?? "0").replace(/[^0-9.]/g, "");
     const turnRes = await apiFetch("/api/checkout/turn", {
       method: "POST",
       body: JSON.stringify({
-        user_text: transcript,
+        user_text: cleanText,
         cart_total: parseFloat(rawTotal || "0"),
         turn_count: (state.turnCount || 0) + 1,
       }),
@@ -324,7 +334,10 @@ async function handleUserTurn(transcript) {
     render();
 
     if (turnRes?.reply_audio_url) {
-      await voiceEngine.playAudio(`${API_BASE_URL}${turnRes.reply_audio_url}`);
+      const audioUrl = turnRes.reply_audio_url.startsWith("http")
+        ? turnRes.reply_audio_url
+        : `${API_BASE_URL}${turnRes.reply_audio_url}`;
+      await voiceEngine.playAudio(audioUrl);
     }
 
     if (!turnRes?.done && state.micOn && state.screen === "conversation") {
@@ -332,6 +345,8 @@ async function handleUserTurn(transcript) {
     }
   } catch (err) {
     console.warn("Turn error:", err);
+    state.error = err?.message ?? String(err);
+    render();
   }
 }
 
