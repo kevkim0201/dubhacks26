@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "rm -rf dist && (vite build --watch --mode development & vite build -c vite.content.config.js --watch --mode development & wait)",
-    "build": "rm -rf dist && vite build && vite build -c vite.content.config.js",
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/clean-dist.mjs && vite build && vite build -c vite.content.config.js",
     "demo": "python3 -m http.server 4321 --directory demo",
     "test": "vitest run"
   },

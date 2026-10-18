@@ -1,6 +1,7 @@
 import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
+import { startCheckoutSession } from "../lib/checkout-api.js";
 import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
-import { applyConversation, loadProgress } from "../lib/progress.js";
+import { loadProgress } from "../lib/progress.js";
 import { icons, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, escape, logo, navBar, progressCard } from "../ui/components.js";
 
@@ -9,6 +10,7 @@ const app = document.getElementById("app");
 const state = {
   screen: "loading", // loading | welcome | talk | conversation | rewards | companion
   session: null,
+  checkoutSessionId: null,
   progress: null,
   checkout: null, // cart the content script spotted in the active tab
   error: null,
@@ -77,7 +79,7 @@ const screens = {
       ${cartCard(state.checkout)}
       <div class="art art-sm">${squirrel({ scarf: hasScarf() })}</div>
       ${progressCard(state.progress)}
-      <button class="btn btn-primary" data-action="start">${icons.mic(16)}<span>Talk to Pip</span></button>
+      <button class="btn btn-primary" data-action="start" ${state.busy ? "disabled" : ""}>${icons.mic(16)}<span>${state.busy ? "Connecting…" : "Talk to Pip"}</span></button>
       <p class="fine">${icons.headphones(12)} Tell Pip why this purchase matters.</p>
     </main>
     ${navBar("talk")}`
@@ -89,7 +91,7 @@ const screens = {
       <div class="empty-cart">${icons.bag(18)}<span>Shopping for something? Talk it through before you head to checkout.</span></div>
       <div class="art art-sm">${squirrel({ scarf: hasScarf() })}</div>
       ${progressCard(state.progress)}
-      <button class="btn btn-primary" data-action="start">${icons.mic(16)}<span>Talk to Pip</span></button>
+      <button class="btn btn-primary" data-action="start" ${state.busy ? "disabled" : ""}>${icons.mic(16)}<span>${state.busy ? "Connecting…" : "Talk to Pip"}</span></button>
       <p class="fine">${icons.headphones(12)} Tell Pip what you're thinking of buying.</p>
     </main>
     ${navBar("talk")}`,
@@ -194,29 +196,42 @@ async function enterApp(session, intent) {
     loadProgress(session.user.id),
     getActiveTabCheckout().catch(() => null),
   ]);
-  if (intent === "conversation") startConversation();
+  if (intent === "conversation") await startConversation();
   else go(intent === "companion" ? "companion" : "talk");
 }
 
-function startConversation() {
-  state.startedAt = Date.now();
-  state.micOn = true;
-  state.recommendation = null;
-  clearInterval(state.timer);
-  state.timer = setInterval(() => {
-    const el = document.getElementById("timer");
-    if (el) el.textContent = formatTime(elapsedSeconds());
-  }, 1000);
-  // TODO: start the voice session with the backend here, passing state.checkout as context.
-  go("conversation");
+async function startConversation() {
+  state.busy = true;
+  state.error = null;
+  render();
+
+  try {
+    const session = await startCheckoutSession(state.checkout);
+
+    state.checkoutSessionId = session.session_id;
+    state.startedAt = Date.now();
+    state.micOn = true;
+    state.recommendation = null;
+    clearInterval(state.timer);
+    state.timer = setInterval(() => {
+      const el = document.getElementById("timer");
+      if (el) el.textContent = formatTime(elapsedSeconds());
+    }, 1000);
+    go("conversation");
+  } catch (err) {
+    state.error = err?.message ?? String(err);
+    render();
+  } finally {
+    state.busy = false;
+    if (state.screen !== "conversation") render();
+  }
 }
 
 async function endConversation() {
   clearInterval(state.timer);
-  // TODO: stop the voice session and set state.recommendation from the agent's verdict.
-  state.result = await applyConversation(state.session.user.id, elapsedSeconds());
-  state.progress = state.result.progress;
-  go("rewards");
+  state.error =
+    "The voice agent is not connected yet. Your checkout session is ready for the voice integration.";
+  render();
 }
 
 const actions = {
