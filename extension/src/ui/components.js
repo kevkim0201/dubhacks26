@@ -1,5 +1,5 @@
 // HTML snippets shared by the popup and the in-page checkout overlay.
-import { levelInfo, xpToNext } from "../lib/progress.js";
+import { levelInfo } from "../lib/progress.js";
 import { icons } from "./art.js";
 
 export const escape = (s) =>
@@ -13,8 +13,9 @@ export function logo(label) {
   return `<span class="logo">${icons.logo()}<span>nook</span>${label ? `<span class="logo-label">${label}</span>` : ""}</span>`;
 }
 
-export function nextUnlockText({ level, xp }) {
-  const remaining = xpToNext(level) - xp;
+export function nextUnlockText({ level, xp, needed, maxed }) {
+  if (maxed) return "Top tier reached · Keep growing together";
+  const remaining = needed - xp;
   const unlock = levelInfo(level + 1).unlock;
   return unlock
     ? `${remaining} XP to level ${level + 1} · A new ${unlock.label.split(" ").pop().toLowerCase()} for Pip`
@@ -23,7 +24,7 @@ export function nextUnlockText({ level, xp }) {
 
 export function progressCard(progress, { footnote = true } = {}) {
   const { level, xp } = progress;
-  const needed = xpToNext(level);
+  const { needed } = progress;
   const pct = Math.min(100, Math.round((xp / needed) * 100));
   return `
     <div class="progress">
@@ -92,5 +93,32 @@ export function navBar(active) {
     <button class="nav-tab ${active === id ? "active" : ""}" data-action="go-${id}">
       ${icon(16)}<span>${label}</span>
     </button>`;
-  return `<nav class="bottom-nav">${tab("talk", "Talk", icons.wave)}${tab("companion", "Companion", icons.sprout)}${tab("impact", "Impact", icons.chart)}${tab("avatar", "Avatar", icons.sparkle)}</nav>`;
+  return `<nav class="bottom-nav">${tab("talk", "Talk", icons.wave)}${tab("companion", "Companion", icons.sprout)}</nav>`;
+}
+
+// Full-page extension views, opened in their own tab from the top-right menu.
+export const PAGES = [
+  { path: "dashboard/index.html", label: "Your impact", sub: "Savings and decisions", icon: icons.chart },
+  { path: "avatar/index.html", label: "Avatar", sub: "Dress up Pip", icon: icons.sparkle },
+  { path: "quests/index.html", label: "Quests", sub: "Weekly goals and forest", icon: icons.leaf },
+];
+
+export function pageMenu(open, { signOut = true } = {}) {
+  return `
+    <div class="menu-wrap">
+      <button class="icon-btn menu-btn ${open ? "open" : ""}" data-action="toggle-menu"
+              aria-label="More pages" aria-haspopup="menu" aria-expanded="${open}">${icons.menu(18)}</button>
+      ${
+        open
+          ? `<div class="menu" role="menu">
+        ${PAGES.map(
+          (p) => `<button class="menu-item" role="menuitem" data-action="open-page" data-path="${p.path}">
+            ${p.icon(16)}<span><strong>${p.label}</strong><small>${p.sub}</small></span>${icons.external(12)}
+          </button>`
+        ).join("")}
+        ${signOut ? `<div class="menu-sep"></div><button class="menu-item" role="menuitem" data-action="sign-out">${icons.logout(16)}<span><strong>Sign out</strong></span></button>` : ""}
+      </div>`
+          : ""
+      }
+    </div>`;
 }

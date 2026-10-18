@@ -2,9 +2,9 @@ import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
 import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
 import { startCheckoutSession, submitCheckoutDecision } from "../lib/checkout-api.js";
 import { loadCosmeticsState } from "../lib/cosmetics-api.js";
-import { applyConversation, loadProgress } from "../lib/progress.js";
+import { progressFromProfile } from "../lib/progress.js";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
-import { acornChip, cartCard, escape, logo, navBar, progressCard } from "../ui/components.js";
+import { acornChip, cartCard, escape, logo, navBar, pageMenu, progressCard } from "../ui/components.js";
 import { API_BASE_URL } from "../lib/config.js";
 import { apiFetch } from "../lib/api.js";
 import { voiceEngine } from "../lib/voice.js";
@@ -81,7 +81,9 @@ const elapsedSeconds = () => Math.floor(((state.endedAt || Date.now()) - state.s
 // ---------- shared pieces ----------
 
 function header({ tagline } = {}) {
-  const right = tagline ? `<span class="tagline">${tagline}</span>` : acornChip(state.progress?.acorns);
+  const right = tagline
+    ? `<span class="tagline">${tagline}</span>`
+    : `<span class="topbar-right">${acornChip(state.progress?.acorns)}${pageMenu(state.menuOpen)}</span>`;
   return `<header class="topbar">${logo()}${right}</header>`;
 }
 
@@ -234,30 +236,31 @@ const screens = {
   },
 
   rewards: () => {
-    const { reward, levelUps } = state.result;
-    const firstUp = levelUps[0];
-    const lastUp = levelUps.at(-1);
+    const { award, decision } = state.result;
+    const followed = award.recommendation_matched;
+    const title = { buy: "Enjoy your purchase.", save: "Saved for later.", skip: "You kept your money." }[decision];
     return `
     ${header()}
     <main class="screen">
-      <h1 class="title center-text">You thought it through<br />with Pip.</h1>
-      <p class="muted center-text sub">You explained your purchase and Pip gave you a thoughtful recommendation.</p>
+      <h1 class="title center-text">${title}</h1>
+      <p class="muted center-text sub">${escape(awardReason(award))}</p>
       <div class="art art-sm">
-        ${squirrel({ scarf: hasScarf(), sparkles: true })}
-        ${state.recommendation ? `<span class="verdict">${icons.clock(12)} ${escape(state.recommendation)}</span>` : ""}
+        ${squirrel({ scarf: hasScarf(), sparkles: award.acorns_awarded > 0 })}
+        ${state.recommendation ? `<span class="verdict">${icons.clock(12)} Pip: ${escape(state.recommendation)}${followed ? " ✓" : ""}</span>` : ""}
       </div>
       <div class="stats">
-        <div class="stat">${icons.sparkle(18)}<strong>+${reward.xp}</strong><span>XP for reflection</span></div>
-        <div class="stat">${icons.acorn(20)}<strong>+${reward.acorns}</strong><span>Acorns earned</span></div>
+        <div class="stat">${icons.sparkle(18)}<strong>+${award.xp_awarded}</strong><span>XP earned</span></div>
+        <div class="stat">${icons.acorn(20)}<strong>+${award.acorns_awarded}</strong><span>Acorns earned</span></div>
       </div>
-      ${lastUp ? `
+      ${award.tier_up ? `
       <div class="levelup">
         ${icons.check(20)}
         <div>
-          <strong>Level up! ${firstUp.from} → ${lastUp.to}</strong>
-          <span>${escape(levelUps.find((u) => u.unlock)?.unlock.description ?? "Pip is growing with you.")}</span>
+          <strong>New tier: ${escape(award.tier)}!</strong>
+          <span>New looks may be waiting in Pip's shop.</span>
         </div>
       </div>` : ""}
+      <p class="fine">${award.acorn_balance} acorns · ${award.total_xp} XP total · ${escape(award.tier)} tier</p>
       <button class="btn btn-primary" data-action="continue">${icons.arrow(16)}<span>Continue</span></button>
     </main>`;
   },
@@ -276,7 +279,6 @@ const screens = {
       ${hasScarf() ? `<p class="new-look">${icons.sparkle(12)} New look: Forest scarf</p>` : ""}
       <div class="card">${progressCard(state.progress)}</div>
       <button class="btn btn-primary" data-action="done">${icons.check(16)}<span>Done for now</span></button>
-      <button class="link" data-action="sign-out">Sign out</button>
     </main>
     ${navBar("companion")}`,
 
@@ -321,11 +323,11 @@ function go(screen) {
 
 async function enterApp(session, intent) {
   state.session = session;
-  [state.progress, state.checkout, state.cosmetics] = await Promise.all([
-    loadProgress(session.user.id),
+  [state.checkout, state.cosmetics] = await Promise.all([
     getActiveTabCheckout().catch(() => null),
     loadCosmeticsState(),
   ]);
+  state.progress = progressFromProfile(state.cosmetics?.profile);
   setSquirrelCosmetics(state.cosmetics);
   if (intent === "conversation") {
     // Land on Talk first so a failed start shows its error there, not on the loading screen.
@@ -571,10 +573,13 @@ async function endConversation(decision = "buy") {
   }
   voiceEngine.stopAll();
 
+  // The database (record_checkout_decision, 20261017_recommendation_rewards.sql) decides
+  // the award from Pip's saved verdict + this decision, logs it, and updates the profile.
   let saveError = null;
+  let award = null;
   if (state.checkoutSessionId) {
     try {
-      await submitCheckoutDecision(state.checkoutSessionId, decision);
+      award = await submitCheckoutDecision(state.checkoutSessionId, decision);
     } catch (e) {
       console.warn("Could not submit decision:", e);
       saveError = !/409|not ready/i.test(String(e?.message))
@@ -586,17 +591,51 @@ async function endConversation(decision = "buy") {
   } else {
     saveError = "This conversation wasn't linked to a checkout session, so the decision wasn't saved.";
   }
-  state.checkoutSessionId = null;
-
-  const userId = state.session?.user?.id ?? "demo_user";
-  state.result = await applyConversation(userId, elapsedSeconds());
-  state.progress = state.result.progress;
   state.busy = false;
-  go("rewards");
+
   if (saveError) {
-    state.error = saveError; // shown as a toast on the rewards screen
+    // Nothing was awarded. Stay on the verdict screen so the choice can be retried.
+    state.screen = state.screen === "conversation" ? "verdict" : state.screen;
+    state.endedAt ||= Date.now();
+    state.error = saveError;
     render();
+    return;
   }
+
+  state.checkoutSessionId = null;
+  state.result = { award, decision };
+  syncBalances(award);
+  go("rewards");
+}
+
+// Keep the header chip, shop and avatar in step with the database after an award.
+function syncBalances(award) {
+  state.progress = progressFromProfile(award);
+  if (state.cosmetics?.profile) {
+    state.cosmetics.profile = {
+      ...state.cosmetics.profile,
+      acorn_balance: award.acorn_balance,
+      total_xp: award.total_xp,
+      tier: award.tier,
+    };
+  }
+  loadCosmeticsState()
+    .then((c) => {
+      state.cosmetics = c;
+      setSquirrelCosmetics(c);
+    })
+    .catch((e) => console.warn("Could not refresh cosmetics after award:", e));
+}
+
+// Plain-language reason for the award, mirroring the matrix in the rewards migration.
+function awardReason({ decision, recommended_decision: rec, recommendation_matched: matched, daily_cap_applied: capped }) {
+  const pick = { buy: "buying", save: "waiting", skip: "skipping" }[rec] ?? "something else";
+  const base = {
+    buy: matched ? "Pip agreed it was worth it, so you earned the full reward." : `Pip suggested ${pick}. Buying anyway earns no acorns.`,
+    save: "Saving it for later always earns acorns.",
+    skip: matched ? "You skipped it, just like Pip suggested. That's the biggest reward." : `Pip suggested ${pick}, but skipping still earns a little.`,
+  }[decision];
+  return capped ? `${base} You've hit today's 200-acorn limit, so this was capped.` : base;
 }
 
 const actions = {
@@ -637,8 +676,10 @@ const actions = {
   done: () => window.close(),
   "go-talk": () => go("talk"),
   "go-companion": () => go("companion"),
-  "go-impact": () => chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/index.html") }),
-  "go-avatar": () => chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") }),
+  "toggle-menu"() {
+    state.menuOpen = !state.menuOpen;
+    render();
+  },
   async "sign-out"() {
     voiceEngine.stopAll();
     await signOut();
@@ -674,8 +715,24 @@ const actions = {
   },
 };
 
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.menuOpen) {
+    state.menuOpen = false;
+    render();
+  }
+});
+
 app.addEventListener("click", (e) => {
   const button = e.target.closest("[data-action]");
+  // Any click outside the menu (or on one of its items) closes it.
+  if (state.menuOpen && button?.dataset.action !== "toggle-menu") {
+    state.menuOpen = false;
+    if (!button) return render();
+  }
+  if (button?.dataset.action === "open-page") {
+    chrome.tabs.create({ url: chrome.runtime.getURL(button.dataset.path) });
+    return render();
+  }
   if (!button || button.disabled) return;
   Promise.resolve(actions[button.dataset.action]?.()).catch((err) => {
     console.error(err);
@@ -708,10 +765,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === "local" && key && changes[key]?.newValue) {
     state.cosmetics = changes[key].newValue;
     setSquirrelCosmetics(state.cosmetics);
-    state.progress = {
-      ...state.progress,
-      acorns: Number(state.cosmetics.profile.acorn_balance),
-    };
+    state.progress = progressFromProfile(state.cosmetics.profile);
     render();
   }
 });

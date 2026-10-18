@@ -1,61 +1,45 @@
-// Pip's growth: XP, levels, acorns and unlocked looks.
-// Stored per user in chrome.storage.local for now; move to the backend later.
+// Pip's growth, derived from the backend profile (profiles.total_xp / acorn_balance / tier).
+// The database is the source of truth: XP and acorns are awarded by
+// record_checkout_decision, and tiers are a generated column in schema.sql.
 
+// Must match the `tier` expression in supabase/schema.sql.
 export const LEVELS = [
-  { level: 1, name: "Tiny seedling" },
-  { level: 2, name: "Curious sprout" },
-  { level: 3, name: "Little explorer" },
-  { level: 4, name: "Thoughtful shopper", unlock: { id: "scarf", label: "Forest scarf", description: "Pip unlocked a forest-green scarf." } },
-  { level: 5, name: "Mindful forager" },
-  { level: 6, name: "Forest guardian" },
+  { level: 1, name: "Baby", min: 0 },
+  { level: 2, name: "Scout", min: 250, unlock: { label: "Backpack" } },
+  { level: 3, name: "Forager", min: 1000, unlock: { label: "Bandana" } },
+  { level: 4, name: "Hoarder", min: 3000, unlock: { label: "Satchel" } },
+  { level: 5, name: "Golden", min: 7500, unlock: { label: "Crown" } },
 ];
 
-const DEFAULT_PROGRESS = { level: 1, xp: 0, acorns: 0, unlocked: [] };
-
-// XP needed to go from `level` to `level + 1`.
-export function xpToNext(level) {
-  return level * 100;
-}
-
 export function levelInfo(level) {
-  return LEVELS.find((l) => l.level === level) ?? { level, name: "Forest legend" };
+  return LEVELS.find((l) => l.level === level) ?? LEVELS.at(-1);
 }
 
-const storageKey = (userId) => `progress:${userId}`;
-
-export async function loadProgress(userId) {
-  const result = await chrome.storage.local.get(storageKey(userId));
-  return { ...DEFAULT_PROGRESS, ...result[storageKey(userId)] };
+/**
+ * Turns a profile row ({ total_xp, acorn_balance, tier }) into what the UI shows:
+ * { level, name, xp (within this tier), needed (XP span of this tier), totalXp, acorns, maxed }.
+ * A missing profile reads as a brand-new user.
+ */
+export function progressFromProfile(profile) {
+  const totalXp = Number(profile?.total_xp ?? 0);
+  const current = [...LEVELS].reverse().find((l) => totalXp >= l.min) ?? LEVELS[0];
+  const next = LEVELS.find((l) => l.level === current.level + 1);
+  const maxed = !next;
+  const span = maxed ? 1 : next.min - current.min;
+  return {
+    level: current.level,
+    name: current.name,
+    xp: maxed ? span : totalXp - current.min,
+    needed: span,
+    totalXp,
+    acorns: Number(profile?.acorn_balance ?? 0),
+    maxed,
+    unlocked: [], // looks come from the cosmetics state now
+  };
 }
 
-async function saveProgress(userId, progress) {
-  await chrome.storage.local.set({ [storageKey(userId)]: progress });
-}
-
-// Rewards for a finished conversation: 12 XP per minute (min 10), 1 acorn per 5 XP.
-export function rewardsFor(durationSeconds) {
-  const minutes = Math.max(1, Math.round(durationSeconds / 60));
-  const xp = Math.max(10, minutes * 12);
-  return { minutes, xp, acorns: Math.max(1, Math.round(xp / 5)) };
-}
-
-// Applies a reward and returns { progress, reward, levelUps: [{ from, to, unlock }] }.
-export async function applyConversation(userId, durationSeconds) {
-  const progress = await loadProgress(userId);
-  const reward = rewardsFor(durationSeconds);
-  const levelUps = [];
-
-  progress.acorns += reward.acorns;
-  progress.xp += reward.xp;
-  while (progress.xp >= xpToNext(progress.level)) {
-    progress.xp -= xpToNext(progress.level);
-    const from = progress.level;
-    progress.level += 1;
-    const unlock = levelInfo(progress.level).unlock ?? null;
-    if (unlock && !progress.unlocked.includes(unlock.id)) progress.unlocked.push(unlock.id);
-    levelUps.push({ from, to: progress.level, unlock });
-  }
-
-  await saveProgress(userId, progress);
-  return { progress, reward, levelUps };
+// XP span of a level (kept for callers that only know the level number).
+export function xpToNext(level) {
+  const next = LEVELS.find((l) => l.level === level + 1);
+  return next ? next.min - levelInfo(level).min : 1;
 }

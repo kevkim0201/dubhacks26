@@ -349,7 +349,7 @@
 .bottom-nav {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   padding: 10px 14px 12px;
   border-top: 1px solid var(--border);
@@ -385,4 +385,94 @@
   background: var(--error-bg);
   color: var(--error);
   font-size: 12px;
+}
+
+/* ---------- top-right page menu ---------- */
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-wrap {
+  position: relative;
+}
+
+.menu-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--green) !important;
+  cursor: pointer;
+}
+
+.menu-btn:hover,
+.menu-btn.open {
+  background: var(--green-soft);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 12px 30px rgb(40 58 47 / 0.16);
+}
+
+.menu-item {
+  display: grid;
+  grid-template-columns: 16px 1fr 12px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--green-soft);
+  outline: none;
+}
+
+.menu-item > svg:first-child {
+  color: var(--green);
+}
+
+.menu-item > svg:last-child {
+  color: var(--muted);
+}
+
+.menu-item span {
+  display: grid;
+}
+
+.menu-item strong {
+  font-size: 13px;
+}
+
+.menu-item small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }

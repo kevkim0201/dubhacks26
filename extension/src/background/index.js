@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 import { getCosmeticsState } from "../lib/cosmetics-api.js";
-import { loadProgress } from "../lib/progress.js";
+import { progressFromProfile } from "../lib/progress.js";
 import { clearCheckout, saveCheckout, setPopupIntent } from "../lib/checkout.js";
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -24,8 +24,8 @@ const handlers = {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
     if (!user) return { signedIn: false, progress: null, cosmetics: null };
-    const [progress, cosmetics] = await Promise.all([loadProgress(user.id), getCosmeticsState()]);
-    progress.acorns = Number(cosmetics.profile.acorn_balance);
+    const cosmetics = await getCosmeticsState();
+    const progress = progressFromProfile(cosmetics.profile);
     return { signedIn: true, userId: user.id, progress, cosmetics };
   },
 

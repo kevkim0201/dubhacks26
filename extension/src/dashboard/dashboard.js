@@ -2,7 +2,7 @@ import { apiFetch } from "../lib/api.js";
 import { checkAuth, signInWithGoogle } from "../lib/auth.js";
 import { setPopupIntent } from "../lib/checkout.js";
 import { loadCosmeticsState } from "../lib/cosmetics-api.js";
-import { levelInfo, loadProgress, xpToNext } from "../lib/progress.js";
+import { levelInfo, progressFromProfile } from "../lib/progress.js";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, escape } from "../ui/components.js";
 import { decisionsChart, savingsChart } from "./charts.js";
@@ -189,8 +189,8 @@ function trends(money) {
 }
 
 function growing() {
-  const p = state.progress ?? { level: 1, xp: 0, unlocked: [] };
-  const needed = xpToNext(p.level);
+  const p = state.progress ?? progressFromProfile(null);
+  const { needed } = p;
   const scarf = p.unlocked?.includes("scarf");
   return `
     <section class="card card-green growing">
@@ -200,7 +200,7 @@ function growing() {
       ${scarf ? `<p class="new-look">${icons.sparkle(12)} New look: Forest scarf</p>` : ""}
       <div class="level-card">
         <strong>Level ${p.level} · ${escape(levelInfo(p.level).name)}</strong>
-        <div class="progress-row"><span>${p.xp} / ${needed} XP</span><span>${needed - p.xp} XP to level ${p.level + 1}</span></div>
+        <div class="progress-row"><span>${p.xp} / ${needed} XP</span><span>${p.maxed ? "Top tier" : `${needed - p.xp} XP to level ${p.level + 1}`}</span></div>
         <div class="bar"><div class="bar-fill" style="width:${Math.round((p.xp / needed) * 100)}%"></div></div>
       </div>
       <p class="fine-left">XP &amp; acorns come from reflecting with Pip, never from spending.</p>
@@ -400,11 +400,8 @@ app.addEventListener("change", (e) => {
 });
 
 async function start() {
-  [state.progress, state.cosmetics] = await Promise.all([
-    loadProgress(state.session.user.id),
-    loadCosmeticsState(),
-  ]);
-  state.progress.acorns = Number(state.cosmetics.profile.acorn_balance);
+  state.cosmetics = await loadCosmeticsState();
+  state.progress = progressFromProfile(state.cosmetics.profile);
   setSquirrelCosmetics(state.cosmetics);
   await load();
 }
@@ -413,7 +410,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   const key = state.session?.user?.id ? `cosmetics:${state.session.user.id}` : "";
   if (areaName === "local" && key && changes[key]?.newValue) {
     state.cosmetics = changes[key].newValue;
-    if (state.progress) state.progress.acorns = Number(state.cosmetics.profile.acorn_balance);
+    state.progress = progressFromProfile(state.cosmetics.profile);
     setSquirrelCosmetics(state.cosmetics);
     render();
   }
