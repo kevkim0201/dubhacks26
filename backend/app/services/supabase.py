@@ -1,0 +1,175 @@
+from typing import Any
+from uuid import UUID
+
+import httpx
+
+from app.core.config import get_settings
+
+
+class SupabaseConfigurationError(RuntimeError):
+    pass
+
+
+class SupabaseUnavailable(RuntimeError):
+    pass
+
+
+class SupabaseAPIError(RuntimeError):
+    def __init__(self, status_code: int, code: str, message: str):
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+
+
+def _request(
+    method: str,
+    path: str,
+    *,
+    params: dict[str, str] | None = None,
+    payload: dict[str, Any] | None = None,
+    prefer: str | None = None,
+) -> Any:
+    settings = get_settings()
+    if not settings.supabase_service_role_key:
+        raise SupabaseConfigurationError("SUPABASE_SERVICE_ROLE_KEY is not configured")
+
+    key = settings.supabase_service_role_key
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    if prefer:
+        headers["Prefer"] = prefer
+
+    try:
+        response = httpx.request(
+            method,
+            f"{settings.supabase_url.rstrip('/')}/rest/v1/{path}",
+            headers=headers,
+            params=params,
+            json=payload,
+            timeout=10,
+        )
+    except httpx.HTTPError as exc:
+        raise SupabaseUnavailable("Could not reach Supabase") from exc
+
+    if not response.is_success:
+        try:
+            error = response.json()
+        except ValueError:
+            error = {}
+        if not isinstance(error, dict):
+            error = {}
+        raise SupabaseAPIError(
+            status_code=response.status_code,
+            code=str(error.get("code", "")),
+            message=str(error.get("message", "Supabase request failed")),
+        )
+
+    if response.status_code == 204 or not response.content:
+        return None
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise SupabaseUnavailable("Supabase returned an invalid response") from exc
+
+
+def create_checkout_session(
+    user_id: str,
+    *,
+    store: str,
+    cart_total: str,
+    currency: str,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    rows = _request(
+        "POST",
+        "checkout_sessions",
+        payload={
+            "user_id": user_id,
+            "store": store,
+            "cart_total": cart_total,
+            "currency": currency,
+            "items": items,
+        },
+        prefer="return=representation",
+    )
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseUnavailable("Supabase did not return the created checkout session")
+    return rows[0]
+
+
+def save_assessment(
+    session_id: UUID,
+    *,
+    assessment: str,
+    suggestion: str,
+    reason_summary: str | None,
+    closing_line: str | None,
+) -> None:
+    rows = _request(
+        "PATCH",
+        "checkout_sessions",
+        params={"id": f"eq.{session_id}", "status": "eq.active"},
+        payload={
+            "assessment": assessment,
+            "suggestion": suggestion,
+            "reason_summary": reason_summary,
+            "closing_line": closing_line,
+        },
+        prefer="return=representation",
+    )
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseAPIError(404, "P0002", "Active checkout session not found")
+
+
+def record_checkout_decision(
+    user_id: str,
+    session_id: UUID,
+    decision: str,
+) -> dict[str, Any]:
+    result = _request(
+        "POST",
+        "rpc/record_checkout_decision",
+        payload={
+            "p_user_id": user_id,
+            "p_session_id": str(session_id),
+            "p_decision": decision,
+        },
+    )
+    if not isinstance(result, dict):
+        raise SupabaseUnavailable("Supabase returned an invalid decision result")
+    return result
+
+
+def get_user_state(user_id: str) -> dict[str, Any]:
+    profiles = _request(
+        "GET",
+        "profiles",
+        params={
+            "id": f"eq.{user_id}",
+            "select": "id,username,total_xp,acorn_balance,tier",
+            "limit": "1",
+        },
+    )
+    if not isinstance(profiles, list) or not profiles:
+        raise SupabaseAPIError(404, "P0002", "User profile not found")
+
+    decisions = _request(
+        "GET",
+        "decisions",
+        params={
+            "user_id": f"eq.{user_id}",
+            "select": (
+                "id,session_id,decision,recommended_decision,"
+                "recommendation_matched,total_acorns,xp_awarded,created_at"
+            ),
+            "order": "created_at.desc",
+            "limit": "20",
+        },
+    )
+    if not isinstance(decisions, list):
+        raise SupabaseUnavailable("Supabase returned an invalid decision history")
+
+    return {"profile": profiles[0], "recent_decisions": decisions}

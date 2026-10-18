@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     supabase_url: str
     supabase_jwt_secret: str = ""
+    supabase_service_role_key: str = ""
+    internal_service_token: str = ""
     cors_origins: str = ""
 
     @property
