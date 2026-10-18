@@ -115,6 +115,7 @@ export const PAGES = [
   { path: "dashboard/index.html", label: "Your impact", sub: "Savings and decisions", icon: icons.chart },
   { path: "avatar/index.html", label: "Avatar", sub: "Dress up Pip", icon: icons.sparkle },
   { path: "quests/index.html", label: "Quests", sub: "Weekly goals and forest", icon: icons.leaf },
+  { path: "onboarding/index.html", label: "Personalize Pip", sub: "Your spending habits", icon: icons.sprout },
 ];
 
 export function pageMenu(open, { signOut = true } = {}) {

@@ -14,6 +14,7 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, "src/popup/index.html"),
         dashboard: resolve(__dirname, "src/dashboard/index.html"),
+        onboarding: resolve(__dirname, "src/onboarding/index.html"),
         avatar: resolve(__dirname, "src/avatar/index.html"),
         quests: resolve(__dirname, "src/quests/index.html"),
         background: resolve(__dirname, "src/background/index.js"),

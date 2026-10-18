@@ -488,3 +488,15 @@ body {
 .deal-list {
   margin-top: 4px;
 }
+
+/* ---------- onboarding offer ---------- */
+
+.onboard {
+  gap: 6px;
+  padding-top: 24px;
+}
+
+.onboard .btn {
+  max-width: 240px;
+  margin-top: 16px;
+}

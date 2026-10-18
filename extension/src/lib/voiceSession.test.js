@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const startSession = vi.fn();
 vi.mock("@elevenlabs/client", () => ({ Conversation: { startSession: (...a) => startSession(...a) } }));
 vi.mock("./api.js", () => ({ apiFetch: vi.fn() }));
-const { startSquirrelVoiceSession } = await import("./voiceSession.js");
+const { startSquirrelVoiceSession, NO_PERSONA } = await import("./voiceSession.js");
 
 const fakeConversation = () => ({ endSession: vi.fn(async () => {}), getOutputVolume: () => 0, getInputVolume: () => 0 });
 
@@ -53,5 +53,13 @@ describe("startSquirrelVoiceSession connect", () => {
     await vi.advanceTimersByTimeAsync(10_001);
     await assertion;
     expect(startSession).not.toHaveBeenCalled();
+  });
+
+  it("always sends user_persona (the agent prompt requires it)", async () => {
+    startSession.mockImplementation(async () => fakeConversation());
+    await startSquirrelVoiceSession({ items: "Mug", total: "$18", userPersona: "Saving up for: Japan." }, {});
+    expect(startSession.mock.calls[0][0].dynamicVariables).toEqual({ cart_items: "Mug", cart_total: "$18", user_persona: "Saving up for: Japan." });
+    await startSquirrelVoiceSession({ items: "Mug", total: "$18" }, {});
+    expect(startSession.mock.calls[1][0].dynamicVariables.user_persona).toBe(NO_PERSONA);
   });
 });

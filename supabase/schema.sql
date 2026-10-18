@@ -16,6 +16,9 @@ create table public.profiles (
       else 'Baby'
     end
   ) stored,
+  personalization jsonb not null default '{}'::jsonb
+    constraint profiles_personalization_is_object check (jsonb_typeof(personalization) = 'object'),
+  onboarding_completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

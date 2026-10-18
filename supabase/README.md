@@ -74,6 +74,9 @@ Avatar closet then offers a **Remove from Pip** action for equipped items.
 
 ## Existing Supabase project
 
+Run `migrations/20261018_onboarding.sql` to add `profiles.personalization` (the answers from
+Pip's onboarding interview) and `profiles.onboarding_completed_at` (null = show the interview).
+
 Run `migrations/20261018_deal_checks.sql` to add `deal_checks`: Pip's price checks after a
 conversation (run now after **Buy** if the user asks, or 24 hours after **Wait**; the dashboard
 runs due waits when it opens).

@@ -461,3 +461,41 @@ def claim_deal_check(user_id: str, check_id: UUID, now_iso: str, stale_before_is
 
 def update_deal_check(user_id: str, check_id: UUID, patch: dict[str, Any]) -> None:
     _request("PATCH", "deal_checks", params={"id": f"eq.{check_id}", "user_id": f"eq.{user_id}"}, payload=patch)
+
+
+# ---------- onboarding / personalization ----------
+
+
+def get_onboarding(user_id: str) -> dict[str, Any]:
+    """The user's onboarding state. Creates the profile row if the sign-up trigger never ran
+    (accounts made before the schema existed), so new users never hit "profile not found"."""
+    params = {"id": f"eq.{user_id}", "select": "id,personalization,onboarding_completed_at", "limit": "1"}
+    rows = _request("GET", "profiles", params=params)
+    if not isinstance(rows, list) or not rows:
+        _request(
+            "POST",
+            "profiles",
+            params={"on_conflict": "id"},
+            payload={"id": user_id},
+            prefer="resolution=ignore-duplicates,return=minimal",
+        )
+        rows = _request("GET", "profiles", params=params)
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseAPIError(404, "P0002", "User profile not found")
+    return rows[0]
+
+
+def save_onboarding(user_id: str, personalization: dict[str, Any]) -> dict[str, Any]:
+    rows = _request(
+        "PATCH",
+        "profiles",
+        params={"id": f"eq.{user_id}", "select": "id,personalization,onboarding_completed_at"},
+        payload={
+            "personalization": personalization,
+            "onboarding_completed_at": datetime.now(timezone.utc).isoformat(),
+        },
+        prefer="return=representation",
+    )
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseAPIError(404, "P0002", "User profile not found")
+    return rows[0]

@@ -6,6 +6,7 @@ import { progressFromProfile } from "../lib/progress.js";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, dealCard, escape, logo, navBar, pageMenu, progressCard } from "../ui/components.js";
 import { runDealCheck, scheduleDealChecks } from "../lib/deal-checks-api.js";
+import { getOnboarding } from "../lib/onboarding-api.js";
 import { API_BASE_URL } from "../lib/config.js";
 import { apiFetch } from "../lib/api.js";
 import { voiceEngine } from "../lib/voice.js";
@@ -314,6 +315,16 @@ const screens = {
     </main>`;
   },
 
+  onboard: () => `
+    ${header()}
+    <main class="screen center onboard">
+      <div class="art">${squirrel({ sparkles: true })}</div>
+      <h1 class="title center-text">Pip wants to get to know you</h1>
+      <p class="muted center-text">A few quick questions about how you shop, so Pip can help in the way that works for you. About a minute.</p>
+      <button class="btn btn-primary" data-action="start-onboarding">${icons.sprout(16)}<span>Start</span></button>
+      <button class="link" data-action="onboarding-later">Later</button>
+    </main>`,
+
   companion: () => `
     ${header()}
     <main class="screen">
@@ -368,6 +379,19 @@ function go(screen) {
   render();
 }
 
+// Offer the onboarding interview until it's done or skipped. "Later" holds off until the
+// browser restarts (session storage), so it doesn't nag on every popup open.
+async function shouldOfferOnboarding() {
+  try {
+    const { onboardingLater } = await chrome.storage.session.get("onboardingLater");
+    if (onboardingLater) return false;
+    return (await getOnboarding()).needs_onboarding;
+  } catch (err) {
+    console.warn("Onboarding status unavailable:", err);
+    return false;
+  }
+}
+
 // The content script keeps updating the cart as the store's page fills in (it starts as a
 // "loading" skeleton). Mirror those updates while the popup is open.
 let watchingCart = false;
@@ -395,6 +419,8 @@ async function enterApp(session, intent) {
   ]);
   state.progress = progressFromProfile(state.cosmetics?.profile);
   setSquirrelCosmetics(state.cosmetics);
+  // New users get Pip's interview first, unless they came from a checkout to talk right now.
+  if (!intent && (await shouldOfferOnboarding())) return go("onboard");
   if (intent === "conversation") {
     // Land on Talk first so a failed start shows its error there, not on the loading screen.
     state.screen = "talk";
@@ -491,7 +517,16 @@ async function startConversation() {
 
     // Log every conversation: create the checkout session before the call starts.
     // If this fails, say so instead of talking without saving anything.
-    const logged = await startCheckoutSession(state.checkout);
+    // Log the session and fetch what Pip learned in onboarding ({{user_persona}}) together.
+    const [logged, userPersona] = await Promise.all([
+      startCheckoutSession(state.checkout),
+      getOnboarding()
+        .then((o) => o.persona_prompt)
+        .catch((err) => {
+          console.warn("No onboarding persona for this call:", err);
+          return null; // voiceSession falls back to "No profile yet"
+        }),
+    ]);
     state.checkoutSessionId = logged.session_id;
 
     state.startedAt = Date.now();
@@ -513,7 +548,7 @@ async function startConversation() {
 
     try {
       state.activeVoiceSession = await startSquirrelVoiceSession(
-        { items: cartItems, total: cartTotal, sessionId: state.checkoutSessionId, startedAt: state.startedAt },
+        { items: cartItems, total: cartTotal, sessionId: state.checkoutSessionId, startedAt: state.startedAt, userPersona },
         {
           onStatus: (step) => {
             state.subtitle = {
@@ -781,6 +816,14 @@ const actions = {
     render();
   },
   continue: () => go("companion"),
+  "start-onboarding"() {
+    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding/index.html") });
+    window.close();
+  },
+  async "onboarding-later"() {
+    await chrome.storage.session.set({ onboardingLater: true }).catch(() => {});
+    go("talk");
+  },
   "skip-deals"() {
     state.dealPromptDismissed = true;
     render();

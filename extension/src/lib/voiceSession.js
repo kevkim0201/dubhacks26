@@ -2,6 +2,8 @@ import { Conversation } from "@elevenlabs/client";
 import { apiFetch } from "./api.js";
 
 const ELEVENLABS_AGENT_ID = "agent_4801m56k1bnffh1sfrwk9a90dvry";
+// The agent prompt uses {{user_persona}}; ElevenLabs rejects calls that leave it out.
+export const NO_PERSONA = "No profile yet: this shopper hasn't shared their spending habits with Pip.";
 
 const MIC_TIMEOUT_MS = 10_000;
 const CONNECT_TIMEOUT_MS = 12_000;
@@ -18,7 +20,8 @@ function withTimeout(promise, ms, message) {
 
 /**
  * Starts a live voice conversation with Pip at checkout and sends the final JSON verdict to FastAPI.
- * @param {Object} cart - { items: "Pro Over-Ear Gym Headphones", total: "eighty-nine dollars", sessionId, startedAt }
+ * @param {Object} cart - { items: "Pro Over-Ear Gym Headphones", total: "eighty-nine dollars", sessionId, startedAt, userPersona }
+ *   userPersona: the onboarding interview as text (GET /api/onboarding -> persona_prompt).
  *   sessionId (from POST /api/checkout/start) makes the backend save the verdict + transcript on that session.
  * @param {Object} callbacks - Optional UI hooks: { onStatus, onTranscript, onModeChange, onVerdict, onEnd, onError }
  *   onStatus("mic" | "connecting" | "retrying") reports which connect step is running.
@@ -79,7 +82,7 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
   }
 
   console.log(`[ElevenLabs API] Connecting WebSocket to agent: ${ELEVENLABS_AGENT_ID}`);
-  console.log(`[ElevenLabs API] Dynamic variables:`, { cart_items: cartItems, cart_total: cartTotal });
+  console.log(`[ElevenLabs API] Dynamic variables:`, { cart_items: cartItems, cart_total: cartTotal, user_persona: cart.userPersona || NO_PERSONA });
 
   // 2. Start live WebSocket session with your ElevenLabs Agent
   const sessionOptions = {
@@ -87,6 +90,7 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
     dynamicVariables: {
       cart_items: cartItems,
       cart_total: cartTotal,
+      user_persona: cart.userPersona || NO_PERSONA,
     },
 
     onConnect: () => {
