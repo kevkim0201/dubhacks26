@@ -30,6 +30,8 @@ const state = {
   // set when a conversation ends
   result: null,
   recommendation: null, // e.g. "Wait 24 hours" / "Go for it", from the voice agent
+  micBlocked: false,
+  grantMicStatus: null,
 };
 
 voiceEngine.onStateChange = ({ isSpeaking, isListening }) => {
@@ -148,13 +150,24 @@ const screens = {
         ${
           !state.micOn
             ? "⏸️ Microphone muted"
-            : state.speaking
-              ? "🔊 Pip is speaking with Eleven Turbo…"
-              : state.listening
-                ? "🎤 Listening… speak into your microphone"
-                : "Thinking…"
+            : state.micBlocked
+              ? "⚠️ Mic permission needed"
+              : state.speaking
+                ? "🔊 Pip is speaking with Eleven Turbo…"
+                : state.listening
+                  ? "🎤 Listening… speak into your microphone"
+                  : "Thinking…"
         }
       </div>
+
+      ${
+        state.micBlocked
+          ? `<div style="margin: 6px 0; padding: 6px 10px; background: #fff3cd; color: #856404; border-radius: 8px; font-size: 11px; text-align: center; border: 1px solid #ffeeba;">
+               Chrome requires granting mic permission once.
+               <button class="btn btn-primary" data-action="grant-mic" style="margin-top: 5px; padding: 4px 10px; font-size: 11px; width: auto; display: inline-block;">Allow Mic in Tab</button>
+             </div>`
+          : ""
+      }
 
       <p class="quote" id="pip-quote">${escape(state.subtitle || (state.checkout ? "“Why do you need this purchase today?”" : "“What are you thinking of buying?”"))}</p>
       
@@ -233,6 +246,27 @@ const screens = {
       <button class="link" data-action="sign-out">Sign out</button>
     </main>
     ${navBar("companion")}`,
+
+  grantMic: () => `
+    ${header()}
+    <main class="screen center">
+      <div class="art">${squirrel({ scarf: hasScarf(), sparkles: true })}</div>
+      <h1 class="title center-text">Enable Microphone</h1>
+      <p class="muted center-text sub">Chrome requires microphone permission to be granted in a tab so Pip can hear you talk.</p>
+      ${
+        state.grantMicStatus === "success"
+          ? `<div style="padding:12px; background:#d4edda; color:#155724; border-radius:10px; font-size:13px; text-align:center; font-weight:600;">
+               ✅ Microphone enabled!<br><span style="font-size:11px; font-weight:normal;">You can now close this tab and return to Pip.</span>
+             </div>
+             <button class="btn btn-primary" data-action="close-tab" style="margin-top:14px;">Close Tab</button>`
+          : state.grantMicStatus === "denied"
+            ? `<div style="padding:12px; background:#f8d7da; color:#721c24; border-radius:10px; font-size:12px; text-align:center;">
+                 ⚠️ Access was denied. Please click the camera/mic icon in the address bar to allow microphone access.
+               </div>
+               <button class="btn btn-primary" data-action="request-mic-permission" style="margin-top:14px;">Try Again</button>`
+            : `<button class="btn btn-primary" data-action="request-mic-permission">${icons.mic(18)}<span>Click to Allow Microphone</span></button>`
+      }
+    </main>`,
 };
 
 function render() {
@@ -314,6 +348,10 @@ function listenForUser() {
     },
     onError: (err) => {
       console.warn("Speech recognition warning:", err);
+      if (err?.code === "not-allowed" || err?.error === "not-allowed") {
+        state.micBlocked = true;
+        render();
+      }
     },
   });
 }
@@ -427,6 +465,30 @@ const actions = {
     state.progress = null;
     go("welcome");
   },
+  "grant-mic"() {
+    const url = chrome?.runtime?.getURL ? chrome.runtime.getURL("popup/index.html?grant_mic=1") : "popup/index.html?grant_mic=1";
+    if (chrome?.tabs?.create) {
+      chrome.tabs.create({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  },
+  async "request-mic-permission"() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      state.grantMicStatus = "success";
+      state.micBlocked = false;
+      render();
+    } catch (e) {
+      console.warn("User media error:", e);
+      state.grantMicStatus = "denied";
+      render();
+    }
+  },
+  "close-tab"() {
+    window.close();
+  },
 };
 
 app.addEventListener("click", (e) => {
@@ -453,14 +515,20 @@ app.addEventListener("submit", (e) => {
 
 // ---------- startup: check auth status first ----------
 
-render();
-Promise.all([checkAuth(), takePopupIntent().catch(() => null)])
-  .then(([session, intent]) => {
-    // If not signed in with Supabase yet, allow guest/demo session so the user can immediately test!
-    const effectiveSession = session ?? { user: { id: "demo_user", email: "demo@example.com" } };
-    enterApp(effectiveSession, intent);
-  })
-  .catch((err) => {
-    console.warn("Auth check fallback to guest:", err);
-    enterApp({ user: { id: "demo_user", email: "demo@example.com" } }, null);
-  });
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get("grant_mic") === "1") {
+  go("grantMic");
+  actions["request-mic-permission"]();
+} else {
+  render();
+  Promise.all([checkAuth(), takePopupIntent().catch(() => null)])
+    .then(([session, intent]) => {
+      // If not signed in with Supabase yet, allow guest/demo session so the user can immediately test!
+      const effectiveSession = session ?? { user: { id: "demo_user", email: "demo@example.com" } };
+      enterApp(effectiveSession, intent);
+    })
+    .catch((err) => {
+      console.warn("Auth check fallback to guest:", err);
+      enterApp({ user: { id: "demo_user", email: "demo@example.com" } }, null);
+    });
+}

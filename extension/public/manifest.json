@@ -23,7 +23,7 @@
       "matches": ["http://*/*", "https://*/*"]
     }
   ],
-  "permissions": ["identity", "storage", "audioCapture"],
+  "permissions": ["identity", "storage"],
   "host_permissions": [
     "https://yvkbtnukbwodzvcuihuu.supabase.co/*",
     "http://localhost:8000/*"

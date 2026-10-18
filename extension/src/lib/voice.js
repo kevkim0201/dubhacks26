@@ -60,21 +60,17 @@ class VoiceEngine {
   async startListening({ onInterim, onResult, onError, onEnd }) {
     this.stopListening();
 
-    // 1. Explicitly prompt / request microphone access
+    // 1. Try requesting microphone stream if available
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
     } catch (err) {
-      console.warn("Microphone permission denied or unavailable:", err);
-      if (onError) {
-        onError(
-          new Error("Microphone permission needed. Please allow microphone access or type below.")
-        );
+      console.warn("getUserMedia permission check in popup:", err);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        if (onError) onError({ code: "not-allowed", message: "Microphone permission required." });
+        return false;
       }
-      this.isListening = false;
-      this._notifyState();
-      return false;
     }
 
     // 2. Initialize Web Speech API
@@ -124,13 +120,14 @@ class VoiceEngine {
 
       rec.onerror = (err) => {
         console.warn("Speech recognition event error:", err.error, err);
-        if (err.error !== "no-speech" && onError) {
+        if (err.error === "not-allowed") {
+          if (onError) onError({ code: "not-allowed", message: "Microphone permission required." });
+        } else if (err.error !== "no-speech" && onError) {
           onError(err);
         }
       };
 
       rec.onend = () => {
-        // If final transcript is waiting, deliver it
         if (finalTranscript.trim() && onResult) {
           onResult(finalTranscript.trim());
           finalTranscript = "";
