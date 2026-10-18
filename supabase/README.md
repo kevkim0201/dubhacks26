@@ -8,8 +8,10 @@ Run it in the Supabase SQL Editor for a new project.
 - `profiles`: one row per Supabase Auth user. `total_xp` is lifetime progression
   and determines the generated `tier`; `acorn_balance` is spendable and may go
   down when users buy cosmetics.
-- `checkout_sessions`: cart snapshot plus the conversation assessment and
-  suggestion. Conversation transcripts are intentionally not stored.
+- `checkout_sessions`: cart snapshot (store, items, total, page URL) plus the
+  conversation: transcript, duration, Pip's assessment, suggestion, reason and
+  closing line. The transcript is what the shopper said out loud, so treat it as
+  personal data. Users can read their own rows only (RLS).
 - `decisions`: one completed action per checkout session, with the stored AI
   recommendation and the acorn/XP payout breakdown.
 - `saved_items`: saved product details for future wishlist features. Saving an
@@ -62,6 +64,10 @@ authenticated user's `/api/cosmetics` state and uses it to render Pip in the
 closet, popup, dashboard, and checkout overlay.
 
 ## Existing Supabase project
+
+Run `migrations/20261018_conversation_logging.sql` to add the conversation log
+columns (`page_url`, `transcript`, `duration_seconds`, `conversation_ended_at`)
+to `checkout_sessions`. It is safe to run more than once.
 
 If you already ran the previous version of `schema.sql`, run
 `migrations/20261017_recommendation_rewards.sql` in the Supabase SQL Editor

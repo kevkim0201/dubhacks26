@@ -1,29 +1,71 @@
 import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
-import { startCheckoutSession } from "../lib/checkout-api.js";
 import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
+import { startCheckoutSession, submitCheckoutDecision } from "../lib/checkout-api.js";
 import { loadCosmeticsState } from "../lib/cosmetics-api.js";
-import { loadProgress } from "../lib/progress.js";
+import { applyConversation, loadProgress } from "../lib/progress.js";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, escape, logo, navBar, progressCard } from "../ui/components.js";
+import { API_BASE_URL } from "../lib/config.js";
+import { apiFetch } from "../lib/api.js";
+import { voiceEngine } from "../lib/voice.js";
+import { startSquirrelVoiceSession } from "../lib/voiceSession.js";
 
 const app = document.getElementById("app");
 
 const state = {
-  screen: "loading", // loading | welcome | talk | conversation | rewards | companion
+  screen: "loading", // loading | welcome | talk | conversation | verdict | rewards | companion
   session: null,
-  checkoutSessionId: null,
   progress: null,
   cosmetics: null,
   checkout: null, // cart the content script spotted in the active tab
+  checkoutSessionId: null,
   error: null,
   busy: false,
   // conversation
   startedAt: 0,
   micOn: true,
   timer: null,
+  subtitle: "",
+  userTranscript: "",
+  turnCount: 0,
+  speaking: false,
+  listening: false,
   // set when a conversation ends
   result: null,
   recommendation: null, // e.g. "Wait 24 hours" / "Go for it", from the voice agent
+  suggestion: null, // raw verdict from the backend: "buy" | "wait" | "skip"
+  endedAt: 0, // when the call ended, so time on the verdict screen doesn't count as talk time
+  micBlocked: false,
+  grantMicStatus: null,
+  activeVoiceSession: null,
+};
+
+voiceEngine.onStateChange = ({ isSpeaking, isListening }) => {
+  state.speaking = isSpeaking;
+  state.listening = isListening;
+  if (state.screen === "conversation") {
+    // Update live status text and waves without losing input focus
+    const waveEl = document.querySelector(".wave");
+    if (waveEl) {
+      waveEl.className = `wave ${state.micOn && (isSpeaking || isListening) ? "" : "paused"}`;
+    }
+    const statusEl = document.getElementById("conv-status-text");
+    if (statusEl) {
+      if (!state.micOn) {
+        statusEl.className = "conversation-status paused";
+        statusEl.textContent = "⏸️ Microphone muted";
+      } else if (isSpeaking) {
+        statusEl.className = "conversation-status speaking";
+        statusEl.textContent = "🔊 Pip is speaking with Eleven Turbo…";
+      } else if (isListening) {
+        statusEl.className = "conversation-status";
+        statusEl.textContent = "🎤 Listening… speak into your microphone";
+      } else {
+        statusEl.className = "conversation-status paused";
+        statusEl.textContent = "Thinking…";
+      }
+    }
+  }
 };
 
 const hasScarf = () => state.progress?.unlocked.includes("scarf");
@@ -34,7 +76,7 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-const elapsedSeconds = () => Math.floor((Date.now() - state.startedAt) / 1000);
+const elapsedSeconds = () => Math.floor(((state.endedAt || Date.now()) - state.startedAt) / 1000);
 
 // ---------- shared pieces ----------
 
@@ -81,7 +123,7 @@ const screens = {
       ${cartCard(state.checkout)}
       <div class="art art-sm">${squirrel({ scarf: hasScarf() })}</div>
       ${progressCard(state.progress)}
-      <button class="btn btn-primary" data-action="start" ${state.busy ? "disabled" : ""}>${icons.mic(16)}<span>${state.busy ? "Connecting…" : "Talk to Pip"}</span></button>
+      <button class="btn btn-primary" data-action="start">${icons.mic(16)}<span>Talk to Pip</span></button>
       <p class="fine">${icons.headphones(12)} Tell Pip why this purchase matters.</p>
     </main>
     ${navBar("talk")}`
@@ -90,11 +132,11 @@ const screens = {
     <main class="screen">
       <h1 class="title">No checkout yet.</h1>
       <p class="muted sub">Pip will pop up when you reach a checkout page.</p>
-      <div class="empty-cart">${icons.bag(18)}<span>Shopping for something? Talk it through before you head to checkout.</span></div>
+      <div class="empty-cart">${icons.bag(18)}<span>Shopping for something? Reach a checkout page or add items to your cart to talk with Pip.</span></div>
       <div class="art art-sm">${squirrel({ scarf: hasScarf() })}</div>
       ${progressCard(state.progress)}
-      <button class="btn btn-primary" data-action="start" ${state.busy ? "disabled" : ""}>${icons.mic(16)}<span>${state.busy ? "Connecting…" : "Talk to Pip"}</span></button>
-      <p class="fine">${icons.headphones(12)} Tell Pip what you're thinking of buying.</p>
+      <button class="btn btn-primary" data-action="start" disabled>${icons.mic(16)}<span>Talk to Pip</span></button>
+      <p class="fine">${icons.headphones(12)} Disabled until a checkout is detected.</p>
     </main>
     ${navBar("talk")}`,
 
@@ -102,30 +144,94 @@ const screens = {
     ${header()}
     <main class="screen">
       <div class="session-row">
-        <span><span class="dot"></span>Talk to Pip</span>
+        <span><span class="dot"></span>Talk to Pip (Eleven Turbo)</span>
         <span id="timer">${formatTime(elapsedSeconds())}</span>
       </div>
       <div class="art">${squirrel({ scarf: hasScarf() })}</div>
-      <div class="wave ${state.micOn ? "" : "paused"}" aria-hidden="true">
+      <div class="wave ${state.micOn && (state.speaking || state.listening) ? "" : "paused"}" aria-hidden="true">
         ${Array.from({ length: 11 }, (_, i) => `<span style="animation-delay:${(i % 5) * 0.12}s"></span>`).join("")}
       </div>
-      <h2 class="title-md">${
-        !state.micOn ? "Paused." : state.checkout ? "Pip is reviewing your cart." : "Pip is listening."
-      }</h2>
-      <p class="quote">${
-        !state.micOn
-          ? "Tap the mic when you're ready to keep going."
-          : state.checkout
-            ? "“Why do you need this purchase today?”"
-            : "“What are you thinking of buying?”"
-      }</p>
-      <div class="call-controls">
+      
+      <div id="conv-status-text" class="conversation-status ${state.speaking ? "speaking" : state.listening ? "" : "paused"}">
+        ${
+          !state.micOn
+            ? "⏸️ Microphone muted"
+            : state.micBlocked
+              ? "⚠️ Mic permission needed"
+              : state.speaking
+                ? "🔊 Pip is speaking with Eleven Turbo…"
+                : state.listening
+                  ? "🎤 Listening… speak into your microphone"
+                  : "Thinking…"
+        }
+      </div>
+
+      ${
+        state.micBlocked
+          ? `<div style="margin: 6px 0; padding: 6px 10px; background: #fff3cd; color: #856404; border-radius: 8px; font-size: 11px; text-align: center; border: 1px solid #ffeeba;">
+               Chrome requires granting mic permission once.
+               <button class="btn btn-primary" data-action="grant-mic" style="margin-top: 5px; padding: 4px 10px; font-size: 11px; width: auto; display: inline-block;">Allow Mic in Tab</button>
+             </div>`
+          : ""
+      }
+
+      <p class="quote" id="pip-quote">${escape(state.subtitle || (state.checkout ? "“Why do you need this purchase today?”" : "“What are you thinking of buying?”"))}</p>
+      
+      <p id="user-transcript-live" class="muted center-text" style="font-size: 12px; margin-top: 4px; font-style: italic; min-height: 16px;">
+        ${state.userTranscript ? `You: “${escape(state.userTranscript)}”` : ""}
+      </p>
+
+      ${
+        state.recommendation
+          ? `<div style="margin: 6px auto; text-align: center;"><span class="verdict">${icons.sparkle(12)} Pip suggests: ${escape(state.recommendation)}</span></div>`
+          : ""
+      }
+
+      <form class="reply-form" id="chat-reply-form">
+        <input type="text" id="chat-reply-text" class="reply-input" placeholder="Or type your reply here…" autocomplete="off" />
+        <button type="submit" class="reply-btn">Send</button>
+      </form>
+
+      <div class="decision-actions">
+        <button class="btn btn-outline" data-action="decide-buy">Buy it</button>
+        <button class="btn btn-outline" data-action="decide-wait">Wait 24h</button>
+        <button class="btn btn-primary" data-action="decide-skip">Skip purchase</button>
+      </div>
+
+      <div class="call-controls" style="padding-top: 4px;">
         <button class="btn-round ${state.micOn ? "" : "off"}" data-action="toggle-mic"
                 aria-label="${state.micOn ? "Mute microphone" : "Unmute microphone"}">${icons.mic(18)}</button>
         <button class="btn btn-primary btn-inline" data-action="end">${icons.stop(14)}<span>End conversation</span></button>
       </div>
-      <p class="fine">Explain your purchase · Pip may advise waiting or give you a go-ahead.</p>
+      <p class="fine">Powered by ElevenLabs Eleven Turbo · Instant voice reflection</p>
     </main>`,
+
+  verdict: () => {
+    const pick = { buy: "decide-buy", wait: "decide-wait", skip: "decide-skip" }[state.suggestion];
+    const choice = (action, label, sub) => `
+      <button class="choice ${pick === action ? "choice-pick" : ""}" data-action="${action}" ${state.busy ? "disabled" : ""}>
+        <span><strong>${label}</strong><span class="muted">${sub}</span></span>
+        ${pick === action ? `<span class="pick-tag">Pip's pick</span>` : ""}
+      </button>`;
+    return `
+    ${header()}
+    <main class="screen">
+      <h1 class="title center-text">${state.recommendation ? "Pip's verdict" : "Thanks for talking it through"}</h1>
+      <p class="muted center-text sub">${formatTime(elapsedSeconds())} with Pip${state.checkout?.store ? ` · ${escape(state.checkout.store)}` : ""}</p>
+      <div class="art art-sm">
+        ${squirrel({ scarf: hasScarf() })}
+        ${state.recommendation ? `<span class="verdict">${icons.sparkle(12)} ${escape(state.recommendation)}</span>` : ""}
+      </div>
+      ${state.subtitle ? `<p class="quote">“${escape(state.subtitle.replace(/^[“"]|[”"]$/g, ""))}”</p>` : ""}
+      <p class="choice-label">What will you do?</p>
+      <div class="choices">
+        ${choice("decide-buy", "Buy it", "It's worth it right now")}
+        ${choice("decide-wait", "Wait 24 hours", "Sleep on it and come back")}
+        ${choice("decide-skip", "Skip it", "Keep the money in your pocket")}
+      </div>
+      <p class="fine">You earn acorns for reflecting, whatever you choose.</p>
+    </main>`;
+  },
 
   rewards: () => {
     const { reward, levelUps } = state.result;
@@ -173,6 +279,27 @@ const screens = {
       <button class="link" data-action="sign-out">Sign out</button>
     </main>
     ${navBar("companion")}`,
+
+  grantMic: () => `
+    ${header()}
+    <main class="screen center">
+      <div class="art">${squirrel({ scarf: hasScarf(), sparkles: true })}</div>
+      <h1 class="title center-text">Enable Microphone</h1>
+      <p class="muted center-text sub">Chrome requires microphone permission to be granted in a tab so Pip can hear you talk.</p>
+      ${
+        state.grantMicStatus === "success"
+          ? `<div style="padding:12px; background:#d4edda; color:#155724; border-radius:10px; font-size:13px; text-align:center; font-weight:600;">
+               ✅ Microphone enabled!<br><span style="font-size:11px; font-weight:normal;">You can now close this tab and return to Pip.</span>
+             </div>
+             <button class="btn btn-primary" data-action="close-tab" style="margin-top:14px;">Close Tab</button>`
+          : state.grantMicStatus === "denied"
+            ? `<div style="padding:12px; background:#f8d7da; color:#721c24; border-radius:10px; font-size:12px; text-align:center;">
+                 ⚠️ Access was denied. Please click the camera/mic icon in the address bar to allow microphone access.
+               </div>
+               <button class="btn btn-primary" data-action="request-mic-permission" style="margin-top:14px;">Try Again</button>`
+            : `<button class="btn btn-primary" data-action="request-mic-permission">${icons.mic(18)}<span>Click to Allow Microphone</span></button>`
+      }
+    </main>`,
 };
 
 function render() {
@@ -200,8 +327,86 @@ async function enterApp(session, intent) {
     loadCosmeticsState(),
   ]);
   setSquirrelCosmetics(state.cosmetics);
-  if (intent === "conversation") await startConversation();
-  else go(intent === "companion" ? "companion" : "talk");
+  if (intent === "conversation") {
+    // Land on Talk first so a failed start shows its error there, not on the loading screen.
+    state.screen = "talk";
+    await startConversation();
+  } else go(intent === "companion" ? "companion" : "talk");
+}
+
+async function handleUserTurn(transcript) {
+  if (!transcript || !transcript.trim()) return;
+  const cleanText = transcript.trim();
+  voiceEngine.stopListening();
+
+  state.userTranscript = cleanText;
+  const tEl = document.getElementById("user-transcript-live");
+  if (tEl) tEl.textContent = `You: “${cleanText}”`;
+
+  const statusEl = document.getElementById("conv-status-text");
+  if (statusEl) {
+    statusEl.className = "conversation-status paused";
+    statusEl.textContent = "🤔 Pip is thinking…";
+  }
+
+  try {
+    const rawTotal = String(state.checkout?.total ?? "0").replace(/[^0-9.]/g, "");
+    const turnRes = await apiFetch("/api/checkout/turn", {
+      method: "POST",
+      body: JSON.stringify({
+        user_text: cleanText,
+        cart_total: parseFloat(rawTotal || "0"),
+        turn_count: (state.turnCount || 0) + 1,
+      }),
+    });
+
+    state.turnCount = (state.turnCount || 0) + 1;
+    if (turnRes?.reply_text) {
+      state.subtitle = turnRes.reply_text;
+      const qEl = document.getElementById("pip-quote");
+      if (qEl) qEl.textContent = turnRes.reply_text;
+    }
+    if (turnRes?.recommendation) {
+      state.recommendation = turnRes.recommendation;
+    }
+    render();
+
+    if (turnRes?.reply_audio_url) {
+      const audioUrl = turnRes.reply_audio_url.startsWith("http")
+        ? turnRes.reply_audio_url
+        : `${API_BASE_URL}${turnRes.reply_audio_url}`;
+      await voiceEngine.playAudio(audioUrl);
+    }
+
+    if (!turnRes?.done && state.micOn && state.screen === "conversation") {
+      listenForUser();
+    }
+  } catch (err) {
+    console.warn("Turn error:", err);
+    state.error = err?.message ?? String(err);
+    render();
+  }
+}
+
+function listenForUser() {
+  if (!state.micOn || state.screen !== "conversation") return;
+  voiceEngine.startListening({
+    onInterim: (interimText) => {
+      state.userTranscript = interimText;
+      const tEl = document.getElementById("user-transcript-live");
+      if (tEl) tEl.textContent = `You: “${interimText}”`;
+    },
+    onResult: (finalText) => {
+      handleUserTurn(finalText);
+    },
+    onError: (err) => {
+      console.warn("Speech recognition warning:", err);
+      if (err?.code === "not-allowed" || err?.error === "not-allowed") {
+        state.micBlocked = true;
+        render();
+      }
+    },
+  });
 }
 
 async function startConversation() {
@@ -210,18 +415,115 @@ async function startConversation() {
   render();
 
   try {
-    const session = await startCheckoutSession(state.checkout);
+    const rawTotal = String(state.checkout?.total ?? "").replace(/[^0-9.]/g, "") || "0";
+    const cartItems = state.checkout?.items?.map((i) => i.name).filter(Boolean).join(", ") ||
+                      state.checkout?.store ||
+                      "Items in cart";
+    const cartTotal = state.checkout?.total ? String(state.checkout.total) : `$${rawTotal}`;
 
-    state.checkoutSessionId = session.session_id;
+    // Log every conversation: create the checkout session before the call starts.
+    // If this fails, say so instead of talking without saving anything.
+    const logged = await startCheckoutSession(state.checkout);
+    state.checkoutSessionId = logged.session_id;
+
     state.startedAt = Date.now();
     state.micOn = true;
     state.recommendation = null;
+    state.suggestion = null;
+    state.verdictError = null;
+    state.endedAt = 0;
+    state.userTranscript = "";
+    state.subtitle = "Connecting with Pip…";
     clearInterval(state.timer);
     state.timer = setInterval(() => {
       const el = document.getElementById("timer");
       if (el) el.textContent = formatTime(elapsedSeconds());
     }, 1000);
+
     go("conversation");
+
+    try {
+      state.activeVoiceSession = await startSquirrelVoiceSession(
+        { items: cartItems, total: cartTotal, sessionId: state.checkoutSessionId, startedAt: state.startedAt },
+        {
+          onTranscript: (entry) => {
+            if (entry.role === "squirrel") {
+              state.subtitle = entry.text;
+              const qEl = document.getElementById("pip-quote");
+              if (qEl) qEl.textContent = entry.text;
+            } else {
+              state.userTranscript = entry.text;
+              const tEl = document.getElementById("user-transcript-live");
+              if (tEl) tEl.textContent = `You: “${entry.text}”`;
+            }
+          },
+          onModeChange: (mode) => {
+            state.speaking = mode === "speaking";
+            state.listening = mode === "listening";
+            const waveEl = document.querySelector(".wave");
+            if (waveEl) waveEl.className = `wave ${mode === "speaking" || mode === "listening" ? "" : "paused"}`;
+            const statusEl = document.getElementById("conv-status-text");
+            if (statusEl) {
+              if (mode === "speaking") {
+                statusEl.className = "conversation-status speaking";
+                statusEl.textContent = "🔊 Pip is speaking…";
+              } else if (mode === "listening") {
+                statusEl.className = "conversation-status";
+                statusEl.textContent = "🎤 Listening… speak into your microphone";
+              } else {
+                statusEl.className = "conversation-status paused";
+                statusEl.textContent = "Thinking…";
+              }
+            }
+          },
+          onVerdict: (verdict) => {
+            if (verdict?.suggestion) state.suggestion = verdict.suggestion;
+            if (verdict?.suggestion) {
+              state.recommendation =
+                verdict.suggestion === "buy" ? "Go for it" :
+                verdict.suggestion === "wait" ? "Wait 24h" : "Skip purchase";
+            }
+            if (verdict?.closing_line) {
+              state.subtitle = verdict.closing_line;
+            }
+            render();
+          },
+          onVerdictError: (err) => {
+            // e.g. API 503: GEMINI_API_KEY not configured — shown if the decision can't be saved
+            state.verdictError = String(err?.message ?? err).replace(/^API \d+: /, "");
+          },
+          onEnd: ({ byAgent }) => {
+            if (byAgent && state.screen === "conversation") showVerdict();
+          },
+          onError: (err) => {
+            console.warn("ElevenLabs Agent error:", err);
+            const errStr = String(err?.message || err);
+            if (errStr.includes("NotAllowedError") || errStr.includes("permission")) {
+              state.micBlocked = true;
+              render();
+            }
+          },
+        }
+      );
+    } catch (wsErr) {
+      console.warn("ElevenLabs WebSocket agent failed, using local voice fallback:", wsErr);
+      const errStr = String(wsErr?.message || wsErr);
+      if (errStr.includes("NotAllowedError") || errStr.includes("permission")) {
+        state.micBlocked = true;
+        render();
+        return;
+      }
+      // Fallback to local TTS + SpeechRecognition engine (reuses the session created above)
+      const session = logged;
+      state.subtitle = session?.opening_line || "“Why do you need this purchase today?”";
+      render();
+      if (session?.audio_url) {
+        await voiceEngine.playAudio(`${API_BASE_URL}${session.audio_url}`);
+      }
+      if (state.micOn && state.screen === "conversation") {
+        listenForUser();
+      }
+    }
   } catch (err) {
     state.error = err?.message ?? String(err);
     render();
@@ -231,11 +533,70 @@ async function startConversation() {
   }
 }
 
-async function endConversation() {
+// Stops the call (if it's still live) and shows Pip's verdict with buy / wait / skip.
+function showVerdict() {
   clearInterval(state.timer);
-  state.error =
-    "The voice agent is not connected yet. Your checkout session is ready for the voice integration.";
+  state.endedAt ||= Date.now();
+  state.activeVoiceSession = null;
+  voiceEngine.stopAll();
+  go("verdict");
+}
+
+async function stopAndShowVerdict() {
+  state.busy = true;
   render();
+  const live = state.activeVoiceSession;
+  state.endedAt ||= Date.now();
+  if (live) {
+    try {
+      await live.stopSession(); // waits for the verdict request
+    } catch (e) {
+      console.warn("Error stopping voice session:", e);
+    }
+  }
+  state.busy = false;
+  showVerdict();
+}
+
+async function endConversation(decision = "buy") {
+  clearInterval(state.timer);
+  state.busy = true;
+  if (state.activeVoiceSession) {
+    try {
+      await state.activeVoiceSession.stopSession();
+    } catch (e) {
+      console.warn("Error stopping voice session:", e);
+    }
+    state.activeVoiceSession = null;
+  }
+  voiceEngine.stopAll();
+
+  let saveError = null;
+  if (state.checkoutSessionId) {
+    try {
+      await submitCheckoutDecision(state.checkoutSessionId, decision);
+    } catch (e) {
+      console.warn("Could not submit decision:", e);
+      saveError = !/409|not ready/i.test(String(e?.message))
+        ? `Your decision wasn't saved: ${e?.message ?? e}`
+        : state.verdictError
+          ? `Pip's verdict failed, so this decision wasn't saved: ${state.verdictError}`
+          : "Pip didn't finish a verdict, so this decision wasn't saved.";
+    }
+  } else {
+    saveError = "This conversation wasn't linked to a checkout session, so the decision wasn't saved.";
+  }
+  state.checkoutSessionId = null;
+
+  const userId = state.session?.user?.id ?? "demo_user";
+  state.result = await applyConversation(userId, elapsedSeconds());
+  state.progress = state.result.progress;
+  state.busy = false;
+  go("rewards");
+  if (saveError) {
+    state.error = saveError; // shown as a toast on the rewards screen
+    render();
+  }
 }
 
 const actions = {
@@ -244,7 +605,9 @@ const actions = {
     state.error = null;
     render();
     try {
-      await enterApp(await signInWithGoogle());
+      const intent = state.pendingIntent;
+      state.pendingIntent = null;
+      await enterApp(await signInWithGoogle(), intent);
     } catch (err) {
       console.error(err);
       state.error = err?.message ?? String(err);
@@ -254,9 +617,20 @@ const actions = {
     }
   },
   start: startConversation,
-  end: endConversation,
+  end: stopAndShowVerdict,
+  "decide-buy": () => endConversation("buy"),
+  "decide-wait": () => endConversation("save"),
+  "decide-skip": () => endConversation("skip"),
   "toggle-mic"() {
     state.micOn = !state.micOn;
+    if (state.activeVoiceSession?.conversation?.setMicMuted) {
+      state.activeVoiceSession.conversation.setMicMuted(!state.micOn);
+    }
+    if (!state.micOn) {
+      voiceEngine.stopListening();
+    } else if (!state.activeVoiceSession) {
+      listenForUser();
+    }
     render();
   },
   continue: () => go("companion"),
@@ -266,12 +640,37 @@ const actions = {
   "go-impact": () => chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/index.html") }),
   "go-avatar": () => chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") }),
   async "sign-out"() {
+    voiceEngine.stopAll();
     await signOut();
     state.session = null;
     state.progress = null;
     state.cosmetics = null;
     setSquirrelCosmetics(null);
     go("welcome");
+  },
+  "grant-mic"() {
+    const url = chrome?.runtime?.getURL ? chrome.runtime.getURL("popup/index.html?grant_mic=1") : "popup/index.html?grant_mic=1";
+    if (chrome?.tabs?.create) {
+      chrome.tabs.create({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  },
+  async "request-mic-permission"() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      state.grantMicStatus = "success";
+      state.micBlocked = false;
+      render();
+    } catch (e) {
+      console.warn("User media error:", e);
+      state.grantMicStatus = "denied";
+      render();
+    }
+  },
+  "close-tab"() {
+    window.close();
   },
 };
 
@@ -283,6 +682,25 @@ app.addEventListener("click", (e) => {
     state.error = err?.message ?? String(err);
     render();
   });
+});
+
+app.addEventListener("submit", (e) => {
+  if (e.target.id === "chat-reply-form") {
+    e.preventDefault();
+    const input = document.getElementById("chat-reply-text");
+    const text = input?.value?.trim();
+    if (text) {
+      input.value = "";
+      if (state.activeVoiceSession?.conversation?.sendUserMessage) {
+        state.userTranscript = text;
+        const tEl = document.getElementById("user-transcript-live");
+        if (tEl) tEl.textContent = `You: “${text}”`;
+        state.activeVoiceSession.conversation.sendUserMessage(text);
+      } else {
+        handleUserTurn(text);
+      }
+    }
+  }
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -300,12 +718,23 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 // ---------- startup: check auth status first ----------
 
-render();
-Promise.all([checkAuth(), takePopupIntent().catch(() => null)])
-  .then(([session, intent]) => (session ? enterApp(session, intent) : go("welcome")))
-  .catch((err) => {
-    console.error(err);
-    go("welcome");
-    state.error = err?.message ?? "Couldn't check your session. Please sign in.";
-    render();
-  });
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get("grant_mic") === "1") {
+  go("grantMic");
+  actions["request-mic-permission"]();
+} else {
+  render();
+  // Conversations are saved to the user's account, so a real Supabase sign-in is required.
+  Promise.all([checkAuth(), takePopupIntent().catch(() => null)])
+    .then(([session, intent]) => {
+      if (session) return enterApp(session, intent);
+      state.pendingIntent = intent; // resume e.g. "Talk to Pip" right after signing in
+      go("welcome");
+    })
+    .catch((err) => {
+      console.warn("Auth check failed:", err);
+      go("welcome");
+      state.error = err?.message ?? "Couldn't check your session. Please sign in.";
+      render();
+    });
+}

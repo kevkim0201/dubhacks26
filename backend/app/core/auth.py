@@ -70,3 +70,23 @@ def get_current_user(
 
 
 AuthUser = Annotated[CurrentUser, Depends(get_current_user)]
+
+
+def get_optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> CurrentUser:
+    if credentials is None:
+        return CurrentUser(id="demo-user", email="demo@example.com", claims={})
+    try:
+        claims = _decode_supabase_jwt(credentials.credentials)
+        return CurrentUser(
+            id=claims["sub"],
+            email=claims.get("email"),
+            role=claims.get("role"),
+            claims=claims,
+        )
+    except Exception:
+        return CurrentUser(id="demo-user", email="demo@example.com", claims={})
+
+
+OptionalAuthUser = Annotated[CurrentUser, Depends(get_optional_user)]

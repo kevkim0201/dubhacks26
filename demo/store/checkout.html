@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout — Acorn Outfitters</title>
+  <link rel="stylesheet" href="store.css">
+  <style>
+    .checkout-layout {
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 32px;
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 40px;
+    }
+    @media (max-width: 860px) {
+      .checkout-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .checkout-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 32px;
+    }
+    .panel-header {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--accent-gold);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .order-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .order-item-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .order-item-name {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .order-item-qty {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .order-item-price {
+      font-size: 14px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .calc-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .total-calc-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 16px 0;
+      margin-top: 12px;
+      border-top: 1px solid var(--border-color);
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+    .place-order-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #ffffff;
+      border: none;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 800;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.2s ease;
+    }
+    .place-order-btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+    .extension-alert-pill {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px dashed rgba(245, 158, 11, 0.4);
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--accent-gold);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="store-header">
+    <a href="index.html" class="brand">
+      <div class="brand-icon">🌰</div>
+      <div>
+        <div class="brand-title">Acorn Outfitters</div>
+        <div class="brand-subtitle">Secure Mock Checkout</div>
+      </div>
+    </a>
+    <div>
+      <a href="index.html" style="color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 600;">
+        &larr; Back to Shop
+      </a>
+    </div>
+  </header>
+
+  <!-- Checkout Grid Layout -->
+  <div class="checkout-layout" data-checkout-page="true" data-checkout-store="acorn-outfitters.com">
+    
+    <!-- Left: Form inputs -->
+    <div>
+      <div class="extension-alert-pill">
+        <span style="font-size: 24px;">🐿️</span>
+        <div>
+          <strong>DubHacks Extension Demo Point:</strong>
+          Reaching this checkout page triggers the content-script cart reader and launches the Squirrel voice reflection overlay!
+        </div>
+      </div>
+
+      <div class="checkout-panel">
+        <h2 class="panel-header">1. Shipping Address</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input type="text" class="form-input" value="Rohit">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input type="text" class="form-input" value="Demo">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Street Address</label>
+          <input type="text" class="form-input" value="4000 15th Ave NE">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input type="text" class="form-input" value="Seattle">
+          </div>
+          <div class="form-group">
+            <label class="form-label">ZIP Code</label>
+            <input type="text" class="form-input" value="98105">
+          </div>
+        </div>
+
+        <h2 class="panel-header" style="margin-top: 28px;">2. Mock Payment Details</h2>
+        <div class="form-group">
+          <label class="form-label">Card Number</label>
+          <input type="text" class="form-input" value="•••• •••• •••• 4242">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Expiration</label>
+            <input type="text" class="form-input" value="12/28">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Security CVC</label>
+            <input type="text" class="form-input" value="888">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Order Summary -->
+    <div>
+      <div class="checkout-panel" id="order-summary-panel">
+        <h2 class="panel-header">Order Summary</h2>
+        
+        <div id="checkout-items-list" class="checkout-items-list">
+          <!-- Populated from cartManager -->
+        </div>
+
+        <div style="margin-top: 20px;">
+          <div class="calc-row">
+            <span>Subtotal</span>
+            <span id="summary-subtotal">$0.00</span>
+          </div>
+          <div class="calc-row">
+            <span>Estimated Shipping</span>
+            <span style="color: var(--accent-green);">FREE</span>
+          </div>
+          <div class="calc-row">
+            <span>Estimated Tax</span>
+            <span id="summary-tax">$0.00</span>
+          </div>
+          <div class="total-calc-row">
+            <span>Total Due</span>
+            <span id="order-total" class="order-total" data-total="0.00">$0.00</span>
+          </div>
+        </div>
+
+        <button id="place-order-btn" class="place-order-btn">
+          Complete Purchase ($0.00)
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="products.js"></script>
+  <script>
+    const itemsList = document.getElementById("checkout-items-list");
+    const summarySubtotal = document.getElementById("summary-subtotal");
+    const summaryTax = document.getElementById("summary-tax");
+    const orderTotal = document.getElementById("order-total");
+    const placeOrderBtn = document.getElementById("place-order-btn");
+
+    function renderCheckoutSummary() {
+      const cart = window.cartManager.cart;
+      if (cart.length === 0) {
+        // Fallback default for direct link
+        window.cartManager.addItem("prod-headphones");
+      }
+
+      const activeCart = window.cartManager.cart;
+      const subtotal = window.cartManager.getTotal();
+      const tax = subtotal * 0.101; // WA sales tax ~10.1%
+      const total = subtotal + tax;
+
+      itemsList.innerHTML = activeCart.map(item => `
+        <div class="order-item-row" data-item-id="${item.id}" data-name="${item.name}" data-price="${item.price}" data-qty="${item.qty}">
+          <div class="order-item-left">
+            <span style="font-size: 20px;">${item.icon}</span>
+            <div>
+              <div class="order-item-name">${item.name}</div>
+              <div class="order-item-qty">Qty: ${item.qty}</div>
+            </div>
+          </div>
+          <div class="order-item-price">$${(item.price * item.qty).toFixed(2)}</div>
+        </div>
+      `).join("");
+
+      summarySubtotal.textContent = "$" + subtotal.toFixed(2);
+      summaryTax.textContent = "$" + tax.toFixed(2);
+      orderTotal.textContent = "$" + total.toFixed(2);
+      orderTotal.setAttribute("data-total", total.toFixed(2));
+      placeOrderBtn.textContent = `Complete Purchase ($${total.toFixed(2)})`;
+    }
+
+    placeOrderBtn.addEventListener("click", () => {
+      alert("Order placed successfully! In a real flow, this sends final receipt data.");
+      window.cartManager.clear();
+      window.location.href = "index.html";
+    });
+
+    renderCheckoutSummary();
+  </script>
+</body>
+</html>

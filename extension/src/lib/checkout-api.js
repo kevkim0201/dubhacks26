@@ -34,6 +34,7 @@ export async function startCheckoutSession(checkout) {
       cart_total: moneyAmount(checkout?.total),
       currency: currencyCode(moneySource),
       items,
+      ...(checkout?.url ? { page_url: checkout.url.slice(0, 2048) } : {}),
     }),
   });
 }

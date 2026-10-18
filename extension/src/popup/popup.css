@@ -304,3 +304,135 @@ body {
   right: 14px;
   bottom: 70px;
 }
+
+/* ---------- interactive conversation additions ---------- */
+
+.conversation-status {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 2px;
+}
+
+.conversation-status.speaking {
+  color: #d97706;
+}
+
+.conversation-status.paused {
+  color: var(--muted);
+}
+
+.reply-form {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 6px;
+  width: 100%;
+}
+
+.reply-input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+}
+
+.reply-input:focus {
+  border-color: var(--green);
+}
+
+.reply-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.decision-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.decision-actions .btn {
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---------- verdict ---------- */
+
+.choice-label {
+  margin: 14px 0 6px !important;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  text-align: left;
+  cursor: pointer;
+}
+
+.choice:hover:not(:disabled) {
+  border-color: var(--green);
+}
+
+.choice:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.choice > span:first-child {
+  display: grid;
+}
+
+.choice strong {
+  font-size: 14px;
+}
+
+.choice .muted {
+  font-size: 11px;
+}
+
+.choice-pick {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+.pick-tag {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+}

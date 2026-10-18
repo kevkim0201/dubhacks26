@@ -1,0 +1,11 @@
+{
+  "mode": "autonomous",
+  "workflow": {
+    "auto_verify": true,
+    "atomic_commits": true,
+    "require_tests": false
+  },
+  "profiles": {
+    "default": "full"
+  }
+}

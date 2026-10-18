@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -82,6 +83,7 @@ def create_checkout_session(
     cart_total: str,
     currency: str,
     items: list[dict[str, Any]],
+    page_url: str | None = None,
 ) -> dict[str, Any]:
     rows = _request(
         "POST",
@@ -92,6 +94,7 @@ def create_checkout_session(
             "cart_total": cart_total,
             "currency": currency,
             "items": items,
+            "page_url": page_url,
         },
         prefer="return=representation",
     )
@@ -117,6 +120,37 @@ def save_assessment(
             "suggestion": suggestion,
             "reason_summary": reason_summary,
             "closing_line": closing_line,
+        },
+        prefer="return=representation",
+    )
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseAPIError(404, "P0002", "Active checkout session not found")
+
+
+def save_conversation(
+    user_id: str,
+    session_id: UUID,
+    *,
+    assessment: str,
+    suggestion: str,
+    reason_summary: str | None,
+    closing_line: str | None,
+    transcript: list[dict[str, str]],
+    duration_seconds: int | None,
+) -> None:
+    """Stores Pip's verdict and the conversation on the user's own active session."""
+    rows = _request(
+        "PATCH",
+        "checkout_sessions",
+        params={"id": f"eq.{session_id}", "user_id": f"eq.{user_id}", "status": "eq.active"},
+        payload={
+            "assessment": assessment,
+            "suggestion": suggestion,
+            "reason_summary": reason_summary,
+            "closing_line": closing_line,
+            "transcript": transcript,
+            "duration_seconds": duration_seconds,
+            "conversation_ended_at": datetime.now(timezone.utc).isoformat(),
         },
         prefer="return=representation",
     )

@@ -4,12 +4,11 @@ import { getSession } from "./auth.js";
 // fetch wrapper that attaches the Supabase access token for the FastAPI backend.
 export async function apiFetch(path, options = {}) {
   if (CONFIG_ERROR) throw new Error(CONFIG_ERROR);
-  const session = await getSession();
-  if (!session?.access_token) {
-    throw new Error("Sign in with Google before connecting to the backend.");
-  }
+  const session = await getSession().catch(() => null);
   const headers = new Headers(options.headers);
-  headers.set("Authorization", `Bearer ${session.access_token}`);
+  if (session?.access_token) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+  }
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }

@@ -33,6 +33,11 @@ create table public.checkout_sessions (
   suggestion text check (suggestion in ('buy', 'wait', 'skip')),
   reason_summary text,
   closing_line text,
+  page_url text,
+  transcript jsonb not null default '[]'::jsonb
+    constraint checkout_sessions_transcript_is_array check (jsonb_typeof(transcript) = 'array'),
+  duration_seconds integer check (duration_seconds >= 0),
+  conversation_ended_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   completed_at timestamptz

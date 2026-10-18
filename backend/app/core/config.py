@@ -10,11 +10,16 @@ ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
-    supabase_url: str
+    supabase_url: str = ""
     supabase_jwt_secret: str = ""
     supabase_service_role_key: str = ""
     internal_service_token: str = ""
     cors_origins: str = ""
+    elevenlabs_api_key: str = ""
+    elevenlabs_agent_id: str = ""
+    gemini_api_key: str = ""
+    # Google retires older models for new keys; override in .env if this one goes away.
+    gemini_model: str = "gemini-3.8-flash"
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -22,6 +27,8 @@ class Settings(BaseSettings):
 
     @property
     def jwks_url(self) -> str:
+        if not self.supabase_url:
+            return ""
         return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
 
 
