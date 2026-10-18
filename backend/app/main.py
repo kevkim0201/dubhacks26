@@ -21,4 +21,10 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(checkout.router)
-# Add new routers here: app.include_router(your_module.router)
+
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+demo_dir = Path(__file__).resolve().parents[2] / "demo" / "store"
+if demo_dir.exists():
+    app.mount("/demo", StaticFiles(directory=str(demo_dir), html=True), name="demo")
