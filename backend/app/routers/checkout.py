@@ -20,6 +20,7 @@ from app.services.supabase import (
     create_checkout_session,
     record_checkout_decision,
     save_assessment,
+    save_conversation,
 )
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
@@ -32,6 +33,7 @@ class CartItem(BaseModel):
     price: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
     quantity: int = Field(default=1, gt=0, le=100)
     url: str | None = Field(default=None, max_length=2048)
+    image: str | None = Field(default=None, max_length=2048)
     item_key: str | None = Field(default=None, max_length=512)
 
 
@@ -40,6 +42,26 @@ class CheckoutStartRequest(BaseModel):
     cart_total: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
     currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
     items: list[CartItem] = Field(default_factory=list, max_length=100)
+    page_url: str | None = Field(default=None, max_length=2048)
+
+
+# Postgres error codes raised by record_checkout_decision -> HTTP status.
+_PG_STATUS = {
+    "22023": 422,
+    "P0002": status.HTTP_404_NOT_FOUND,
+    "23505": status.HTTP_409_CONFLICT,
+    "55000": status.HTTP_409_CONFLICT,
+}
+
+
+def _supabase_http_error(exc: Exception, action: str) -> HTTPException:
+    if isinstance(exc, SupabaseConfigurationError):
+        return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc))
+    if isinstance(exc, SupabaseUnavailable):
+        return HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
+    if isinstance(exc, SupabaseAPIError):
+        return HTTPException(_PG_STATUS.get(exc.code, status.HTTP_502_BAD_GATEWAY), f"Could not {action}: {exc}")
+    return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Could not {action}")
 
 
 class AssessmentRequest(BaseModel):
@@ -149,21 +171,21 @@ def handle_checkout_turn(payload: CheckoutTurnRequest) -> dict:
 
 
 @router.post("/start", status_code=status.HTTP_201_CREATED)
-def start_checkout(payload: CheckoutStartRequest, user: OptionalAuthUser) -> dict:
-    session_id = f"sess_{secrets.token_hex(6)}"
-    session_status = "active"
+def start_checkout(payload: CheckoutStartRequest, user: AuthUser) -> dict:
+    # Every conversation is logged against a real session; no silent local fallback.
     try:
         session = create_checkout_session(
             user.id,
             store=payload.store,
             cart_total=str(payload.cart_total),
             currency=payload.currency,
-            items=[item.model_dump(mode="json") for item in payload.items],
+            items=[item.model_dump(mode="json", exclude_none=True) for item in payload.items],
+            page_url=payload.page_url,
         )
-        session_id = str(session.get("id", session_id))
-        session_status = str(session.get("status", session_status))
-    except Exception as exc:
-        print(f"Note: Supabase session store bypassed, using local session: {exc}")
+    except (SupabaseConfigurationError, SupabaseUnavailable, SupabaseAPIError) as exc:
+        raise _supabase_http_error(exc, "start a checkout session") from exc
+    session_id = str(session["id"])
+    session_status = str(session["status"])
 
     if payload.items:
         first_item = payload.items[0].name
@@ -220,21 +242,14 @@ def set_checkout_assessment(
 
 @router.post("/{session_id}/decision")
 def submit_decision(
-    session_id: str,
+    session_id: UUID,
     payload: DecisionRequest,
-    user: OptionalAuthUser,
+    user: AuthUser,
 ) -> dict:
     try:
-        uuid_val = UUID(session_id)
-        return record_checkout_decision(user.id, uuid_val, payload.decision)
-    except Exception as exc:
-        print(f"Note: Supabase decision store bypassed: {exc}")
-        return {
-            "decision": payload.decision,
-            "status": "completed",
-            "xp_earned": 50,
-            "acorns_earned": 10,
-        }
+        return record_checkout_decision(user.id, session_id, payload.decision)
+    except (SupabaseConfigurationError, SupabaseUnavailable, SupabaseAPIError) as exc:
+        raise _supabase_http_error(exc, "record your decision") from exc
 
 
 class TranscriptEntry(BaseModel):
@@ -245,7 +260,10 @@ class TranscriptEntry(BaseModel):
 class VerdictRequest(BaseModel):
     cart_items: str
     cart_total: str
-    transcript: List[TranscriptEntry]
+    transcript: List[TranscriptEntry] = Field(max_length=200)
+    # When set, the verdict and conversation are saved on this session.
+    session_id: UUID | None = None
+    duration_seconds: int | None = Field(default=None, ge=0, le=6 * 60 * 60)
 
 
 class SquirrelVerdictJSON(BaseModel):
@@ -294,7 +312,23 @@ async def generate_and_save_verdict(
     )
 
     verdict = SquirrelVerdictJSON.model_validate_json(response.text)
-    user_id = getattr(user, "id", "demo_user")
-    print(f"[User {user_id}] Verdict JSON:", verdict.model_dump())
+
+    if payload.session_id:
+        if user is None or user.id == "demo-user":
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in to save the conversation")
+        try:
+            save_conversation(
+                user.id,
+                payload.session_id,
+                assessment=verdict.assessment,
+                suggestion=verdict.suggestion,
+                reason_summary=verdict.reason_summary,
+                closing_line=verdict.closing_line,
+                transcript=[m.model_dump() for m in payload.transcript],
+                duration_seconds=payload.duration_seconds,
+            )
+        except (SupabaseConfigurationError, SupabaseUnavailable, SupabaseAPIError) as exc:
+            raise _supabase_http_error(exc, "save the conversation") from exc
+
     return verdict
 

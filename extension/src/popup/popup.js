@@ -414,6 +414,11 @@ async function startConversation() {
                       "Items in cart";
     const cartTotal = state.checkout?.total ? String(state.checkout.total) : `$${rawTotal}`;
 
+    // Log every conversation: create the checkout session before the call starts.
+    // If this fails, say so instead of talking without saving anything.
+    const logged = await startCheckoutSession(state.checkout);
+    state.checkoutSessionId = logged.session_id;
+
     state.startedAt = Date.now();
     state.micOn = true;
     state.recommendation = null;
@@ -431,7 +436,7 @@ async function startConversation() {
 
     try {
       state.activeVoiceSession = await startSquirrelVoiceSession(
-        { items: cartItems, total: cartTotal },
+        { items: cartItems, total: cartTotal, sessionId: state.checkoutSessionId, startedAt: state.startedAt },
         {
           onTranscript: (entry) => {
             if (entry.role === "squirrel") {
@@ -496,20 +501,8 @@ async function startConversation() {
         render();
         return;
       }
-      // Fallback to local TTS + SpeechRecognition engine
-      let session = null;
-      try {
-        session = await startCheckoutSession(state.checkout);
-      } catch (e) {
-        session = {
-          session_id: null,
-          opening_line: state.checkout?.items?.[0]?.name
-            ? `Ooh, ${state.checkout.total ?? ""} for ${state.checkout.items[0].name}! Why do you need this today?`
-            : "“Why do you need this purchase today?”",
-          audio_url: `/api/checkout/voice/speak?text=${encodeURIComponent("Why do you need this purchase today?")}`,
-        };
-      }
-      state.checkoutSessionId = session?.session_id ?? null;
+      // Fallback to local TTS + SpeechRecognition engine (reuses the session created above)
+      const session = logged;
       state.subtitle = session?.opening_line || "“Why do you need this purchase today?”";
       render();
       if (session?.audio_url) {
@@ -566,19 +559,30 @@ async function endConversation(decision = "buy") {
   }
   voiceEngine.stopAll();
 
-  if (state.checkoutSessionId && state.checkoutSessionId !== "demo-session") {
+  let saveError = null;
+  if (state.checkoutSessionId) {
     try {
       await submitCheckoutDecision(state.checkoutSessionId, decision);
     } catch (e) {
       console.warn("Could not submit decision:", e);
+      saveError = /409|not ready/i.test(String(e?.message))
+        ? "Pip didn't finish a verdict, so this decision wasn't saved."
+        : `Your decision wasn't saved: ${e?.message ?? e}`;
     }
+  } else {
+    saveError = "This conversation wasn't linked to a checkout session, so the decision wasn't saved.";
   }
+  state.checkoutSessionId = null;
 
   const userId = state.session?.user?.id ?? "demo_user";
   state.result = await applyConversation(userId, elapsedSeconds());
   state.progress = state.result.progress;
   state.busy = false;
   go("rewards");
+  if (saveError) {
+    state.error = saveError; // shown as a toast on the rewards screen
+    render();
+  }
 }
 
 const actions = {

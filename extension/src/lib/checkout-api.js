@@ -23,6 +23,8 @@ export async function startCheckoutSession(checkout) {
       price: moneyAmount(item.price),
       quantity: 1,
       ...(item.url ? { url: item.url } : {}),
+      // Thumbnails for the dashboard; skip inline data: images, which can be huge.
+      ...(/^https?:/.test(item.image ?? "") && item.image.length <= 2048 ? { image: item.image } : {}),
     }));
 
   return apiFetch("/api/checkout/start", {
@@ -32,6 +34,7 @@ export async function startCheckoutSession(checkout) {
       cart_total: moneyAmount(checkout?.total),
       currency: currencyCode(moneySource),
       items,
+      ...(checkout?.url ? { page_url: checkout.url.slice(0, 2048) } : {}),
     }),
   });
 }

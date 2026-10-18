@@ -5,7 +5,8 @@ const ELEVENLABS_AGENT_ID = "agent_4801m56k1bnffh1sfrwk9a90dvry";
 
 /**
  * Starts a live voice conversation with Pip at checkout and sends the final JSON verdict to FastAPI.
- * @param {Object} cart - { items: "Pro Over-Ear Gym Headphones", total: "eighty-nine dollars" }
+ * @param {Object} cart - { items: "Pro Over-Ear Gym Headphones", total: "eighty-nine dollars", sessionId, startedAt }
+ *   sessionId (from POST /api/checkout/start) makes the backend save the verdict + transcript on that session.
  * @param {Object} callbacks - Optional UI hooks: { onTranscript, onModeChange, onVerdict, onEnd, onError }
  *   onEnd({ byAgent, verdict }) fires once the call is over and the verdict request has finished.
  */
@@ -38,6 +39,8 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
           cart_items: cartItems,
           cart_total: cartTotal,
           transcript: transcript,
+          ...(cart.sessionId ? { session_id: cart.sessionId } : {}),
+          duration_seconds: Math.round((Date.now() - (cart.startedAt ?? Date.now())) / 1000),
         }),
       });
 
