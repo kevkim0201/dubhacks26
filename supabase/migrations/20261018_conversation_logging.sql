@@ -12,3 +12,6 @@ alter table public.checkout_sessions
 alter table public.checkout_sessions
   add constraint checkout_sessions_transcript_is_array
   check (jsonb_typeof(transcript) = 'array');
+
+-- Make the REST API see the new columns immediately.
+notify pgrst, 'reload schema';

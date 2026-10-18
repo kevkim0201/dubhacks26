@@ -323,8 +323,11 @@ async function enterApp(session, intent) {
     loadProgress(session.user.id),
     getActiveTabCheckout().catch(() => null),
   ]);
-  if (intent === "conversation") await startConversation();
-  else go(intent === "companion" ? "companion" : "talk");
+  if (intent === "conversation") {
+    // Land on Talk first so a failed start shows its error there, not on the loading screen.
+    state.screen = "talk";
+    await startConversation();
+  } else go(intent === "companion" ? "companion" : "talk");
 }
 
 async function handleUserTurn(transcript) {
@@ -591,7 +594,9 @@ const actions = {
     state.error = null;
     render();
     try {
-      await enterApp(await signInWithGoogle());
+      const intent = state.pendingIntent;
+      state.pendingIntent = null;
+      await enterApp(await signInWithGoogle(), intent);
     } catch (err) {
       console.error(err);
       state.error = err?.message ?? String(err);
@@ -691,14 +696,17 @@ if (urlParams.get("grant_mic") === "1") {
   actions["request-mic-permission"]();
 } else {
   render();
+  // Conversations are saved to the user's account, so a real Supabase sign-in is required.
   Promise.all([checkAuth(), takePopupIntent().catch(() => null)])
     .then(([session, intent]) => {
-      // If not signed in with Supabase yet, allow guest/demo session so the user can immediately test!
-      const effectiveSession = session ?? { user: { id: "demo_user", email: "demo@example.com" } };
-      enterApp(effectiveSession, intent);
+      if (session) return enterApp(session, intent);
+      state.pendingIntent = intent; // resume e.g. "Talk to Pip" right after signing in
+      go("welcome");
     })
     .catch((err) => {
-      console.warn("Auth check fallback to guest:", err);
-      enterApp({ user: { id: "demo_user", email: "demo@example.com" } }, null);
+      console.warn("Auth check failed:", err);
+      go("welcome");
+      state.error = err?.message ?? "Couldn't check your session. Please sign in.";
+      render();
     });
 }
