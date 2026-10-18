@@ -3,8 +3,8 @@
 ## Current Status
 - **Current Milestone:** Milestone 1 (Hackathon MVP)
 - **Active Phase:** Phase 1 (Foundation, API Contracts & Mock Store)
-- **Status:** Initialized from `squirrel-savings-design-doc.md`
-- **Next Command:** `/gsd-plan-phase 1`
+- **Status:** Phase 1 Planned (3 plans: 01-01, 01-02, 01-03)
+- **Next Command:** `/gsd-execute-phase 1`
 
 ## Decision Log
 - **2026-10-17:** Adopted FastAPI backend (`backend/`) and Vite Chrome MV3 extension (`extension/`).
