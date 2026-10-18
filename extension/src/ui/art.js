@@ -43,6 +43,7 @@ export function squirrel({ scarf = false, sparkles = false } = {}) {
       neck: asset("neck"),
       held: asset("held"),
       effect: asset("effect"),
+      pet: asset("pet"),
       label: `${tier ?? "Baby"} squirrel`,
     }).replace("</svg>", `<style>${SCENE_CSS}</style></svg>`);
   }

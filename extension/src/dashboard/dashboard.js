@@ -362,7 +362,7 @@ async function openPopup(screen) {
 }
 
 const actions = {
-  "open-avatar": () => chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") }),
+  "open-avatar": () => window.location.assign(chrome.runtime.getURL("avatar/index.html")),
   "open-quests": () => chrome.tabs.create({ url: chrome.runtime.getURL("quests/index.html") }),
   async google() {
     try {

@@ -44,8 +44,9 @@ const handlers = {
     return { ok: true };
   },
 
-  async OPEN_AVATAR() {
-    await chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") });
+  async OPEN_AVATAR(_message, sender) {
+    if (!sender.tab?.id) throw new Error("Couldn't find the current browser tab.");
+    await chrome.tabs.update(sender.tab.id, { url: chrome.runtime.getURL("avatar/index.html") });
     return { ok: true };
   },
 

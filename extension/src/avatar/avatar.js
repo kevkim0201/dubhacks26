@@ -1,6 +1,6 @@
 import { checkAuth, signInWithGoogle } from "../lib/auth.js";
 import { setPopupIntent } from "../lib/checkout.js";
-import { equipCosmetic, loadCosmeticsState, purchaseCosmetic } from "../lib/cosmetics-api.js";
+import { equipCosmetic, loadCosmeticsState, purchaseCosmetic, unequipCosmetic } from "../lib/cosmetics-api.js";
 import { renderItem, renderScene, SCENE_CSS } from "../../assets/squirrel-assets.js";
 import { icons } from "../ui/art.js";
 import { acornChip, escape, logo } from "../ui/components.js";
@@ -14,7 +14,7 @@ const TIERS = [
   { name: "Golden", minXp: 7500 },
 ];
 
-const CATEGORIES = ["Backgrounds", "Hats", "Neck & body", "Held items", "Effects"];
+const CATEGORIES = ["Backgrounds", "Hats", "Neck & body", "Held items", "Effects", "Pets"];
 const ITEMS = [
   { id: "meadow", name: "Meadow", category: "Backgrounds", icon: "🌼", cost: 0, tier: "Baby", scene: "meadow" },
   { id: "forest", name: "Forest", category: "Backgrounds", icon: "🌲", cost: 200, tier: "Scout", scene: "forest" },
@@ -77,6 +77,12 @@ const ITEMS = [
   { id: "snowflakes", name: "Snowflakes", category: "Effects", icon: "❄️", cost: 600, tier: "Hoarder" },
   { id: "fireflies", name: "Fireflies", category: "Effects", icon: "✨", cost: 750, tier: "Hoarder" },
   { id: "cherry-blossoms", name: "Cherry Blossoms", category: "Effects", icon: "🌸", cost: 900, tier: "Hoarder" },
+
+  { id: "pet-bunny", name: "Bunny", category: "Pets", icon: "🐰", cost: 35, tier: "Baby" },
+  { id: "pet-chick", name: "Chick", category: "Pets", icon: "🐥", cost: 50, tier: "Baby" },
+  { id: "pet-turtle", name: "Turtle", category: "Pets", icon: "🐢", cost: 150, tier: "Scout" },
+  { id: "pet-fox", name: "Fox", category: "Pets", icon: "🦊", cost: 300, tier: "Forager" },
+  { id: "pet-otter", name: "Otter", category: "Pets", icon: "🦦", cost: 600, tier: "Hoarder" },
 ];
 
 const ASSETS = {
@@ -137,6 +143,11 @@ const ASSETS = {
   snowflakes: ["effects", "snow"],
   fireflies: ["effects", "fireflies"],
   "cherry-blossoms": ["effects", "blossoms"],
+  "pet-bunny": ["pets", "bunny"],
+  "pet-chick": ["pets", "chick"],
+  "pet-turtle": ["pets", "turtle"],
+  "pet-fox": ["pets", "fox"],
+  "pet-otter": ["pets", "otter"],
 };
 
 const state = {
@@ -151,6 +162,7 @@ const state = {
   loadError: "",
   saving: false,
   toast: "",
+  previewDefault: false,
 };
 
 const tierIndex = (tier) => TIERS.findIndex((item) => item.name === tier);
@@ -159,9 +171,17 @@ const currentCategoryItems = () => ITEMS.filter((item) => item.category === stat
 const selectedItem = () => ITEMS.find((item) => item.id === state.selected);
 const fmt = (n) => new Intl.NumberFormat().format(n);
 const assetFor = (item) => (item ? ASSETS[item.id] : undefined);
+const slotForCategory = {
+  Backgrounds: "background",
+  Hats: "head",
+  "Neck & body": "neck",
+  "Held items": "held",
+  Effects: "effect",
+  Pets: "pet",
+};
 
 function sceneOptions() {
-  const chosen = selectedItem();
+  const chosen = state.previewDefault ? null : selectedItem();
   const equipped = (category) =>
     chosen?.category === category ? chosen : ITEMS.find((item) => item.id === state.equipped[category]);
   const [backgroundCategory, background] = assetFor(equipped("Backgrounds")) ?? ["backgrounds", "meadow"];
@@ -169,6 +189,7 @@ function sceneOptions() {
   const [neckCategory, neck] = assetFor(equipped("Neck & body")) ?? ["neck", "none"];
   const [heldCategory, held] = assetFor(equipped("Held items")) ?? ["held", "none"];
   const [effectCategory, effect] = assetFor(equipped("Effects")) ?? ["effects", "none"];
+  const [petCategory, pet] = assetFor(equipped("Pets")) ?? ["pets", "none"];
   return {
     level: tierIndex(currentTier().name) + 1,
     background: backgroundCategory === "backgrounds" ? background : "meadow",
@@ -176,6 +197,7 @@ function sceneOptions() {
     neck: neckCategory === "neck" ? neck : "none",
     held: heldCategory === "held" ? held : "none",
     effect: effectCategory === "effects" ? effect : "none",
+    pet: petCategory === "pets" ? pet : "none",
     label: `${currentTier().name} squirrel`,
   };
 }
@@ -251,9 +273,7 @@ function details() {
   const canAfford = state.acorns >= item.cost;
   const buttonText = locked
     ? `Unlocks at ${item.tier}`
-    : active
-      ? "Wearing now"
-      : owned
+    : owned
         ? "Wear this"
         : item.cost === 0
           ? (item.gift ? "Claim gift" : "Get for free")
@@ -265,7 +285,9 @@ function details() {
       <h2>${item.name}</h2>
       <p class="muted">${item.gift ? `A little welcome gift when Pip reaches ${item.tier}.` : item.cost === 0 ? "A classic look for Pip, always free." : `A ${item.tier}-tier favorite, made for your next adventure.`}</p>
       <div class="detail-facts"><span>Available at</span><strong>${item.tier} · ${TIERS.find((tier) => tier.name === item.tier).minXp.toLocaleString()} XP</strong></div>
-      <button class="btn btn-primary item-action" data-action="equip" ${locked || active || (!owned && !canAfford) ? "disabled" : ""}>${buttonText}</button>
+      ${active
+        ? `<button class="btn btn-outline item-action" data-action="unequip">Remove from Pip</button>`
+        : `<button class="btn btn-primary item-action" data-action="equip" ${locked || (!owned && !canAfford) ? "disabled" : ""}>${buttonText}</button>`}
       ${!locked && !owned && !canAfford ? `<p class="muted afford-note">You need ${fmt(item.cost - state.acorns)} more acorns.</p>` : ""}
     </aside>`;
 }
@@ -373,9 +395,11 @@ app.addEventListener("click", async (event) => {
   if (button.dataset.category) {
     state.category = button.dataset.category;
     state.selected = currentCategoryItems()[0]?.id;
+    state.previewDefault = false;
     render();
   } else if (button.dataset.item) {
     state.selected = button.dataset.item;
+    state.previewDefault = false;
     render();
   } else if (button.dataset.action === "equip") {
     const item = selectedItem();
@@ -386,6 +410,23 @@ app.addEventListener("click", async (event) => {
       if (!state.owned.has(item.id)) applyCosmeticsState(await purchaseCosmetic(item.id));
       applyCosmeticsState(await equipCosmetic(item.id));
       notify(`${item.name} is ready on Pip!`);
+    } catch (error) {
+      console.error(error);
+      state.toast = error?.message ?? String(error);
+      render();
+    } finally {
+      state.saving = false;
+    }
+  } else if (button.dataset.action === "unequip") {
+    const item = selectedItem();
+    const slot = item && slotForCategory[item.category];
+    if (!item || !slot || state.saving) return;
+    state.saving = true;
+    button.disabled = true;
+    try {
+      applyCosmeticsState(await unequipCosmetic(slot));
+      state.previewDefault = true;
+      notify(`${item.name} was removed. Pip's default look is back!`);
     } catch (error) {
       console.error(error);
       state.toast = error?.message ?? String(error);
