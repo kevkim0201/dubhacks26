@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     cors_origins: str = ""
     elevenlabs_api_key: str = ""
     elevenlabs_agent_id: str = ""
+    gemini_api_key: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

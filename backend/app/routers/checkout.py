@@ -1,11 +1,14 @@
+import os
 import secrets
 import urllib.parse
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, List, Literal
 from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response, status
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.core.auth import AuthUser, OptionalAuthUser
@@ -232,4 +235,66 @@ def submit_decision(
             "xp_earned": 50,
             "acorns_earned": 10,
         }
+
+
+class TranscriptEntry(BaseModel):
+    role: Literal["squirrel", "user"]
+    text: str
+
+
+class VerdictRequest(BaseModel):
+    cart_items: str
+    cart_total: str
+    transcript: List[TranscriptEntry]
+
+
+class SquirrelVerdictJSON(BaseModel):
+    assessment: Literal["clear_need", "unsure", "impulsive"]
+    suggestion: Literal["buy", "wait", "skip"]
+    reason_summary: str
+    closing_line: str
+
+
+@router.post("/verdict", response_model=SquirrelVerdictJSON)
+async def generate_and_save_verdict(
+    payload: VerdictRequest,
+    user: OptionalAuthUser = None,
+) -> SquirrelVerdictJSON:
+    settings = get_settings()
+    api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_API_KEY not configured in backend/.env",
+        )
+
+    gemini_client = genai.Client(api_key=api_key)
+
+    formatted_tx = "\n".join([f"{m.role.upper()}: {m.text}" for m in payload.transcript])
+
+    prompt = f"""
+    Analyze this checkout voice conversation between Pip the Squirrel and the shopper.
+    Cart Items: {payload.cart_items}
+    Cart Total: {payload.cart_total}
+    
+    Conversation Transcript:
+    {formatted_tx}
+
+    Produce the structured JSON verdict evaluating the purchase.
+    """
+
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=SquirrelVerdictJSON,
+            temperature=0.1,
+        ),
+    )
+
+    verdict = SquirrelVerdictJSON.model_validate_json(response.text)
+    user_id = getattr(user, "id", "demo_user")
+    print(f"[User {user_id}] Verdict JSON:", verdict.model_dump())
+    return verdict
 
