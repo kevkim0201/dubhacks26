@@ -1,0 +1,15 @@
+{
+  "match": { "urls": ["http://localhost:8000/demo/index.html#prod-hoodie"], "titles": ["CloudKnit Heavyweight Hoodie"] },
+  "steps": [
+    "Ooh, CloudKnit Heavyweight Hoodie! Let me check if that's a good price...",
+    "Searching Google Shopping for 'CloudKnit Heavyweight Hoodie'...",
+    "Found 6 listings to sniff through",
+    "Double-checking the math..."
+  ],
+  "offers": [
+    { "title": "CloudKnit Heavyweight Hoodie 450gsm", "seller": "Nordstrom", "price": 62.0, "shipping": 0, "condition": "new",
+      "link": "https://www.nordstrom.com/sr?keyword=CloudKnit+Heavyweight+Hoodie", "match_confidence": 0.88, "reason": "Same hoodie and fabric weight" }
+  ],
+  "coupons": [],
+  "verdict_reason": "Only $3 cheaper at Nordstrom, so this price is fair."
+}

@@ -109,6 +109,18 @@ still fails, record the exact on-screen error and check that the installed exten
 Google callback URL, Supabase redirect allow list, and Supabase project host permission all
 match.
 
+### Deal agent
+
+`POST /api/deals` and `/api/deals/stream` answer "is this a good deal?" for a product page
+(Gemini + SerpAPI Google Shopping). Needs `GEMINI_API_KEY` and `SERPAPI_KEY`; set `DEMO_MODE=1`
+for canned results. Try it from the terminal:
+
+```bash
+cd backend && .venv/bin/python -m scripts.try_product https://www.bestbuy.com/site/123 --title "Sony WH-1000XM5" --price 399.99
+```
+
+Design and contract: [DEAL_AGENT_PLAN.md](DEAL_AGENT_PLAN.md).
+
 ### Adding a route
 
 Create `app/routers/things.py`:

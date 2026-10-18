@@ -1,0 +1,21 @@
+{
+  "match": { "urls": ["http://localhost:8000/demo/index.html#prod-flask"], "titles": ["Thermal Hydro Flask 32oz", "Thermal Hydro Flask"] },
+  "steps": [
+    "Ooh, Thermal Hydro Flask 32oz! Let me check if that's a good price...",
+    "Searching Google Shopping for 'Thermal Hydro Flask 32oz'...",
+    "Found 10 listings to sniff through",
+    "Skipping 1 used or refurbished listing",
+    "Checking my coupon stash for localhost",
+    "Found a coupon for localhost!",
+    "Double-checking the math..."
+  ],
+  "offers": [
+    { "title": "Thermal Hydro Flask 32oz Wide Mouth", "seller": "REI", "price": 29.95, "shipping": 0, "condition": "new",
+      "link": "https://www.rei.com/search?q=Thermal+Hydro+Flask+32oz", "match_confidence": 0.93, "reason": "Same size and lid" },
+    { "title": "Thermal Hydro Flask 32oz", "seller": "Amazon", "price": 31.5, "shipping": 0, "condition": "new",
+      "link": "https://www.amazon.com/s?k=Thermal+Hydro+Flask+32oz", "match_confidence": 0.9, "reason": "Same size" },
+    { "title": "Thermal Hydro Flask 18oz", "seller": "Walmart", "price": 22.0, "shipping": 0, "condition": "new",
+      "link": "https://www.walmart.com/search?q=Thermal+Hydro+Flask+18oz", "match_confidence": 0.4, "reason": "Smaller 18oz size" }
+  ],
+  "coupons": [{ "code": "NOOK10", "description": "10% off your order (demo store)", "source": "static" }]
+}

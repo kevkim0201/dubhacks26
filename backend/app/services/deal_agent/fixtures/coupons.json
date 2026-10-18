@@ -1,0 +1,6 @@
+{
+  "_comment": "Static coupons keyed by domain. Only add codes you've verified; the agent repeats them to users. The localhost entry is for the demo store.",
+  "localhost": [
+    { "code": "NOOK10", "description": "10% off your order (demo store)", "source": "static" }
+  ]
+}

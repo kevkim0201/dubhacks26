@@ -1,0 +1,16 @@
+{
+  "match": { "urls": ["http://localhost:8000/demo/index.html#prod-sneakers"], "titles": ["AeroStride Marathon Sneakers"] },
+  "steps": [
+    "Ooh, AeroStride Marathon Sneakers! Let me check if that's a good price...",
+    "Searching Google Shopping for 'AeroStride Marathon Sneakers'...",
+    "Found 7 listings to sniff through",
+    "Searching Google Shopping for 'AeroStride Marathon carbon plate'...",
+    "Found 4 listings to sniff through",
+    "Double-checking the math..."
+  ],
+  "offers": [
+    { "title": "AeroStride Marathon Sneakers", "seller": "Dick's Sporting Goods", "price": 129.99, "shipping": 0, "condition": "new",
+      "link": "https://www.dickssportinggoods.com/search/SearchDisplay?searchTerm=AeroStride", "match_confidence": 0.92, "reason": "Same shoe, higher price" }
+  ],
+  "coupons": []
+}
