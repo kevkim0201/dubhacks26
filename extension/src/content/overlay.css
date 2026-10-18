@@ -1,0 +1,106 @@
+:host {
+  all: initial;
+}
+
+/* Blurs the store page behind Pip so the pause feels like a pause. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  background: rgb(40 58 47 / 0.18);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: fade-in 0.3s ease;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.panel {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: 300px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 50px rgb(40 58 47 / 0.22), 0 2px 8px rgb(40 58 47 / 0.08);
+  overflow: hidden;
+  animation: slide-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.panel .topbar {
+  padding: 12px 14px;
+}
+
+.panel .logo {
+  font-size: 16px;
+}
+
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted) !important;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--green-soft);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 12px;
+  overflow-y: auto;
+}
+
+.body .title {
+  font-size: 18px;
+}
+
+.body > .muted {
+  margin: 2px 0 10px;
+}
+
+.ask {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ask-sub {
+  margin: 4px 0 10px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.panel .bottom-nav {
+  padding: 8px 12px 10px;
+}

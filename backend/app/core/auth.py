@@ -1,6 +1,8 @@
+import ssl
 from functools import lru_cache
 from typing import Annotated
 
+import certifi
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -20,7 +22,10 @@ class CurrentUser(BaseModel):
 
 @lru_cache
 def _jwks_client() -> jwt.PyJWKClient:
-    return jwt.PyJWKClient(get_settings().jwks_url, cache_keys=True)
+    # Use certifi's CA bundle: python.org installs on macOS ship without system
+    # certs, which makes the JWKS fetch fail with CERTIFICATE_VERIFY_FAILED.
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    return jwt.PyJWKClient(get_settings().jwks_url, cache_keys=True, ssl_context=ssl_context)
 
 
 def _decode_supabase_jwt(token: str) -> dict:

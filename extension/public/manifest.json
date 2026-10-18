@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "DubHacks26",
+  "name": "Nook",
   "version": "0.1.0",
-  "description": "DubHacks26 Chrome extension",
+  "description": "Pause before you purchase. Talk it through with Pip at checkout.",
   "action": {
     "default_popup": "popup/index.html"
   },
@@ -10,6 +10,19 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["fonts/*"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
   "permissions": ["identity", "storage"],
   "host_permissions": ["http://localhost:8000/*"]
 }
