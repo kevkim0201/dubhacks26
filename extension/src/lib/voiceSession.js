@@ -6,7 +6,8 @@ const ELEVENLABS_AGENT_ID = "agent_4801m56k1bnffh1sfrwk9a90dvry";
 /**
  * Starts a live voice conversation with Pip at checkout and sends the final JSON verdict to FastAPI.
  * @param {Object} cart - { items: "Pro Over-Ear Gym Headphones", total: "eighty-nine dollars" }
- * @param {Object} callbacks - Optional UI hooks: { onTranscript, onModeChange, onVerdict, onError }
+ * @param {Object} callbacks - Optional UI hooks: { onTranscript, onModeChange, onVerdict, onEnd, onError }
+ *   onEnd({ byAgent, verdict }) fires once the call is over and the verdict request has finished.
  */
 export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
   // 1. Request microphone permission from the browser
@@ -16,9 +17,17 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
   const cartTotal = String(cart.total || "empty");
   const transcript = [];
   let verdictSent = false;
+  let verdictPromise = null;
+  let stoppedByUser = false;
 
-  async function sendVerdictToBackend() {
-    if (verdictSent || transcript.length === 0) return;
+  // Only one verdict request per call; later callers share its result.
+  function sendVerdictToBackend() {
+    verdictPromise ??= requestVerdict();
+    return verdictPromise;
+  }
+
+  async function requestVerdict() {
+    if (verdictSent || transcript.length === 0) return null;
     verdictSent = true;
 
     try {
@@ -72,10 +81,12 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
       callbacks.onModeChange?.(mode);
     },
 
-    // Fires automatically when Pip ends the call on Turn 3 (or if manually stopped)
-    onDisconnect: async () => {
-      console.log("[ElevenLabs Response] 📞 Call disconnected.");
-      await sendVerdictToBackend();
+    // Fires when Pip calls the end_call tool after its verdict, or when we stop the session.
+    onDisconnect: async (details) => {
+      const byAgent = !stoppedByUser && details?.reason !== "user";
+      console.log(`[ElevenLabs Response] 📞 Call disconnected (${details?.reason ?? "unknown"}).`);
+      const verdict = await sendVerdictToBackend();
+      callbacks.onEnd?.({ byAgent, verdict });
     },
 
     onError: (err) => {
@@ -87,6 +98,7 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
   return {
     conversation,
     stopSession: async () => {
+      stoppedByUser = true;
       await conversation.endSession();
       return await sendVerdictToBackend();
     },

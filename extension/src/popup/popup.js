@@ -12,7 +12,7 @@ import { startSquirrelVoiceSession } from "../lib/voiceSession.js";
 const app = document.getElementById("app");
 
 const state = {
-  screen: "loading", // loading | welcome | talk | conversation | rewards | companion
+  screen: "loading", // loading | welcome | talk | conversation | verdict | rewards | companion
   session: null,
   progress: null,
   checkout: null, // cart the content script spotted in the active tab
@@ -31,6 +31,8 @@ const state = {
   // set when a conversation ends
   result: null,
   recommendation: null, // e.g. "Wait 24 hours" / "Go for it", from the voice agent
+  suggestion: null, // raw verdict from the backend: "buy" | "wait" | "skip"
+  endedAt: 0, // when the call ended, so time on the verdict screen doesn't count as talk time
   micBlocked: false,
   grantMicStatus: null,
   activeVoiceSession: null,
@@ -72,7 +74,7 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-const elapsedSeconds = () => Math.floor((Date.now() - state.startedAt) / 1000);
+const elapsedSeconds = () => Math.floor(((state.endedAt || Date.now()) - state.startedAt) / 1000);
 
 // ---------- shared pieces ----------
 
@@ -201,6 +203,33 @@ const screens = {
       </div>
       <p class="fine">Powered by ElevenLabs Eleven Turbo · Instant voice reflection</p>
     </main>`,
+
+  verdict: () => {
+    const pick = { buy: "decide-buy", wait: "decide-wait", skip: "decide-skip" }[state.suggestion];
+    const choice = (action, label, sub) => `
+      <button class="choice ${pick === action ? "choice-pick" : ""}" data-action="${action}" ${state.busy ? "disabled" : ""}>
+        <span><strong>${label}</strong><span class="muted">${sub}</span></span>
+        ${pick === action ? `<span class="pick-tag">Pip's pick</span>` : ""}
+      </button>`;
+    return `
+    ${header()}
+    <main class="screen">
+      <h1 class="title center-text">${state.recommendation ? "Pip's verdict" : "Thanks for talking it through"}</h1>
+      <p class="muted center-text sub">${formatTime(elapsedSeconds())} with Pip${state.checkout?.store ? ` · ${escape(state.checkout.store)}` : ""}</p>
+      <div class="art art-sm">
+        ${squirrel({ scarf: hasScarf() })}
+        ${state.recommendation ? `<span class="verdict">${icons.sparkle(12)} ${escape(state.recommendation)}</span>` : ""}
+      </div>
+      ${state.subtitle ? `<p class="quote">“${escape(state.subtitle.replace(/^[“"]|[”"]$/g, ""))}”</p>` : ""}
+      <p class="choice-label">What will you do?</p>
+      <div class="choices">
+        ${choice("decide-buy", "Buy it", "It's worth it right now")}
+        ${choice("decide-wait", "Wait 24 hours", "Sleep on it and come back")}
+        ${choice("decide-skip", "Skip it", "Keep the money in your pocket")}
+      </div>
+      <p class="fine">You earn acorns for reflecting, whatever you choose.</p>
+    </main>`;
+  },
 
   rewards: () => {
     const { reward, levelUps } = state.result;
@@ -388,6 +417,8 @@ async function startConversation() {
     state.startedAt = Date.now();
     state.micOn = true;
     state.recommendation = null;
+    state.suggestion = null;
+    state.endedAt = 0;
     state.userTranscript = "";
     state.subtitle = "Connecting with Pip…";
     clearInterval(state.timer);
@@ -433,6 +464,7 @@ async function startConversation() {
             }
           },
           onVerdict: (verdict) => {
+            if (verdict?.suggestion) state.suggestion = verdict.suggestion;
             if (verdict?.suggestion) {
               state.recommendation =
                 verdict.suggestion === "buy" ? "Go for it" :
@@ -442,6 +474,9 @@ async function startConversation() {
               state.subtitle = verdict.closing_line;
             }
             render();
+          },
+          onEnd: ({ byAgent }) => {
+            if (byAgent && state.screen === "conversation") showVerdict();
           },
           onError: (err) => {
             console.warn("ElevenLabs Agent error:", err);
@@ -493,8 +528,34 @@ async function startConversation() {
   }
 }
 
+// Stops the call (if it's still live) and shows Pip's verdict with buy / wait / skip.
+function showVerdict() {
+  clearInterval(state.timer);
+  state.endedAt ||= Date.now();
+  state.activeVoiceSession = null;
+  voiceEngine.stopAll();
+  go("verdict");
+}
+
+async function stopAndShowVerdict() {
+  state.busy = true;
+  render();
+  const live = state.activeVoiceSession;
+  state.endedAt ||= Date.now();
+  if (live) {
+    try {
+      await live.stopSession(); // waits for the verdict request
+    } catch (e) {
+      console.warn("Error stopping voice session:", e);
+    }
+  }
+  state.busy = false;
+  showVerdict();
+}
+
 async function endConversation(decision = "buy") {
   clearInterval(state.timer);
+  state.busy = true;
   if (state.activeVoiceSession) {
     try {
       await state.activeVoiceSession.stopSession();
@@ -516,6 +577,7 @@ async function endConversation(decision = "buy") {
   const userId = state.session?.user?.id ?? "demo_user";
   state.result = await applyConversation(userId, elapsedSeconds());
   state.progress = state.result.progress;
+  state.busy = false;
   go("rewards");
 }
 
@@ -535,7 +597,7 @@ const actions = {
     }
   },
   start: startConversation,
-  end: () => endConversation("buy"),
+  end: stopAndShowVerdict,
   "decide-buy": () => endConversation("buy"),
   "decide-wait": () => endConversation("save"),
   "decide-skip": () => endConversation("skip"),
