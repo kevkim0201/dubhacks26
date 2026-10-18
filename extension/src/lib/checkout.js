@@ -16,7 +16,9 @@ export async function getActiveTabCheckout() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return null;
   const result = await chrome.storage.session.get(cartKey(tab.id));
-  return result[cartKey(tab.id)] ?? null;
+  const checkout = result[cartKey(tab.id)] ?? null;
+  // Remember which tab the cart lives in, so the popup can offer to close it.
+  return checkout ? { ...checkout, tabId: tab.id } : null;
 }
 
 export async function setPopupIntent(screen) {

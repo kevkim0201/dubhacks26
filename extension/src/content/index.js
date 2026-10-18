@@ -6,13 +6,12 @@ import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, logo, navBar, progressCard } from "../ui/components.js";
 import { readCheckout, scoreCheckout } from "./detect.js";
 
-// After "Not now" or "Talk to Pip", stay quiet on this site for a while so
-// multi-step checkouts (shipping → payment → review) don't re-pop the overlay.
-const QUIET_MS = 30 * 60 * 1000;
-const quietKey = () => `quiet:${location.hostname}`;
+// "Not now" only hides Pip for the current page view; reloading or the next
+// checkout page shows the overlay again.
 
 let host = null; // overlay host element (null when hidden)
 let lastSent = null;
+let dismissedUrl = null; // set by "Not now" so DOM changes on this page don't re-open it
 let activeCheckout = null;
 let activeUserId = null;
 let debug = false;
@@ -24,15 +23,6 @@ function send(message) {
     // Extension was reloaded; this content script is orphaned.
     return Promise.resolve(null);
   }
-}
-
-async function isQuiet() {
-  const { [quietKey()]: until = 0 } = await chrome.storage.local.get(quietKey());
-  return Date.now() < until;
-}
-
-function goQuiet() {
-  chrome.storage.local.set({ [quietKey()]: Date.now() + QUIET_MS });
 }
 
 // @font-face doesn't work inside shadow roots, so register the font on the page.
@@ -90,7 +80,7 @@ async function openPopup(screen) {
 }
 
 function dismissOverlay() {
-  goQuiet();
+  dismissedUrl = location.href;
   hideOverlay();
 }
 
@@ -126,7 +116,6 @@ async function showOverlay(checkout) {
       if (action === "close") {
         dismissOverlay();
       } else if (action === "talk" || action === "go-talk") {
-        goQuiet();
         openPopup("conversation");
       } else if (action === "go-impact") {
         send({ type: "OPEN_DASHBOARD" });
@@ -160,7 +149,7 @@ async function scan() {
   lastSent = key;
 
   send({ type: "CHECKOUT_DETECTED", checkout });
-  if (host || !(await isQuiet())) showOverlay(checkout);
+  if (host || dismissedUrl !== location.href) showOverlay(checkout);
 }
 
 // Re-scan when the page changes (SPAs, carts that load late). Debounced, but

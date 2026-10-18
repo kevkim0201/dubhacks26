@@ -38,6 +38,10 @@ create table public.checkout_sessions (
     constraint checkout_sessions_transcript_is_array check (jsonb_typeof(transcript) = 'array'),
   duration_seconds integer check (duration_seconds >= 0),
   conversation_ended_at timestamptz,
+  category text check (category in ('electronics', 'clothing', 'shoes', 'beauty', 'home', 'kitchen', 'food',
+      'health', 'sports', 'outdoors', 'toys', 'books', 'entertainment', 'travel',
+      'office', 'pets', 'jewelry', 'automotive', 'other')),
+  item_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   completed_at timestamptz
@@ -62,6 +66,10 @@ create table public.decisions (
   daily_cap_applied boolean not null default false,
   legacy_reward_breakdown jsonb,
   reason_summary text,
+  category text check (category in ('electronics', 'clothing', 'shoes', 'beauty', 'home', 'kitchen', 'food',
+      'health', 'sports', 'outdoors', 'toys', 'books', 'entertainment', 'travel',
+      'office', 'pets', 'jewelry', 'automotive', 'other')),
+  item_name text,
   created_at timestamptz not null default now(),
   check (total_acorns = engagement_acorns + decision_bonus_acorns),
   check (xp_awarded = total_acorns)

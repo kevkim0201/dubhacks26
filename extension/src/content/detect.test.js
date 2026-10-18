@@ -113,6 +113,30 @@ describe("checkouts that should trigger", () => {
   });
 });
 
+describe("item names without product images", () => {
+  it("reads names from product-title elements", () => {
+    const r = detect(
+      `<html><head><title>Checkout - Best Buy</title></head><body>
+        <h1>Checkout</h1>
+        <section class="order-summary">
+          <ul>
+            <li class="cart-item"><span class="item-title">Sony WH-1000XM6 Wireless Headphones</span><span>$449.99</span></li>
+            <li class="cart-item"><span class="item-title">USB-C Charging Cable (6 ft)</span><span>$19.99</span></li>
+          </ul>
+          <div><span>Subtotal</span><span>$469.98</span></div>
+          <div><span>Total</span><span>$503.29</span></div>
+        </section>
+        <button>Place your order</button>
+      </body></html>`,
+      "https://www.bestbuy.com/checkout/c/standard"
+    );
+    expect(r.cart.total).toBe("$503.29");
+    expect(r.cart.items.map((i) => i.name)).toEqual(["Sony WH-1000XM6 Wireless Headphones", "USB-C Charging Cable (6 ft)"]);
+    expect(r.cart.items[0].price).toBe("$449.99");
+    expect(r.cart.itemCount).toBe(2);
+  });
+});
+
 describe("pages that should not trigger", () => {
   it("product page with express-pay buttons", () => {
     const r = detect(

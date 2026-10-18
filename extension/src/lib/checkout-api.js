@@ -14,35 +14,41 @@ function currencyCode(value) {
   return "USD";
 }
 
-export async function startCheckoutSession(checkout) {
+// The cart as the backend stores it; used when the session starts and again with the decision.
+function cartPayload(checkout) {
   const moneySource = checkout?.total ?? checkout?.items?.find((item) => item.price)?.price;
   const items = (checkout?.items ?? [])
     .filter((item) => item.name?.trim())
     .map((item) => ({
-      name: item.name.trim(),
+      name: item.name.trim().slice(0, 200),
       price: moneyAmount(item.price),
-      quantity: 1,
-      ...(item.url ? { url: item.url } : {}),
+      quantity: Math.min(100, Math.max(1, Number(item.quantity) || 1)),
+      ...(item.url ? { url: item.url.slice(0, 2048) } : {}),
       // Thumbnails for the dashboard; skip inline data: images, which can be huge.
       ...(/^https?:/.test(item.image ?? "") && item.image.length <= 2048 ? { image: item.image } : {}),
     }));
+  return {
+    store: checkout?.store || "Unknown store",
+    cart_total: moneyAmount(checkout?.total),
+    currency: currencyCode(moneySource),
+    items,
+    ...(checkout?.url ? { page_url: checkout.url.slice(0, 2048) } : {}),
+  };
+}
 
+export async function startCheckoutSession(checkout) {
   return apiFetch("/api/checkout/start", {
     method: "POST",
-    body: JSON.stringify({
-      store: checkout?.store || "Unknown store",
-      cart_total: moneyAmount(checkout?.total),
-      currency: currencyCode(moneySource),
-      items,
-      ...(checkout?.url ? { page_url: checkout.url.slice(0, 2048) } : {}),
-    }),
+    body: JSON.stringify(cartPayload(checkout)),
   });
 }
 
-export async function submitCheckoutDecision(sessionId, decision) {
+// Sends the decision with the current cart so the backend can fill anything the
+// session snapshot missed (store, total, items, page URL) before awarding.
+export async function submitCheckoutDecision(sessionId, decision, checkout = null) {
   if (!sessionId) throw new Error("Start a checkout session before submitting a decision.");
   return apiFetch(`/api/checkout/${encodeURIComponent(sessionId)}/decision`, {
     method: "POST",
-    body: JSON.stringify({ decision }),
+    body: JSON.stringify({ decision, ...(checkout ? cartPayload(checkout) : {}) }),
   });
 }

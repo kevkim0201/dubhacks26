@@ -67,7 +67,11 @@ closet, popup, dashboard, and checkout overlay.
 
 Run `migrations/20261018_conversation_logging.sql` to add the conversation log
 columns (`page_url`, `transcript`, `duration_seconds`, `conversation_ended_at`)
-to `checkout_sessions`. It is safe to run more than once.
+to `checkout_sessions`, then `migrations/20261018_purchase_category.sql` to add
+`category` and `item_name` to `checkout_sessions` and `decisions`. Both are safe
+to run more than once. Then run `migrations/20261018_category_values.sql`, which
+limits `category` to the fixed list Pip classifies into (see `CATEGORIES` in
+`backend/app/routers/checkout.py`).
 
 If you already ran the previous version of `schema.sql`, run
 `migrations/20261017_recommendation_rewards.sql` in the Supabase SQL Editor

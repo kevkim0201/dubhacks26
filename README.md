@@ -70,8 +70,8 @@ How detection works (`src/content/`):
 - `detect.js` – everything else is scored: checkout URL, card fields or card iframes,
   place-order buttons, checkout headings, address fields and an order total each add
   points; article pages lose points. 5+ points = checkout.
-- After "Not now" or "Talk to Pip", the overlay stays quiet on that site for 30 minutes
-  so multi-step checkouts don't re-pop it.
+- "Not now" hides the overlay for the current page only; reloading the page or moving to
+  the next checkout step shows Pip again.
 - `npm test` runs fixture tests (`detect.test.js`). Add a fixture when a real site misfires.
 
 Debugging on a real site: open the service worker console from `chrome://extensions` and run

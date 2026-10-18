@@ -158,6 +158,37 @@ function findItems(totalLabel) {
     const stated = container.textContent.match(/\b(\d{1,3})\s+items?\b/i);
     return { items, count: stated ? Number(stated[1]) : items.length };
   }
+  return findItemsByText(totalLabel);
+}
+
+// Product-name elements, for summaries that show no (or lazy-loaded) images.
+const NAME_SELECTOR = [
+  "[class*='item-name' i]", "[class*='itemname' i]", "[class*='item-title' i]", "[class*='itemtitle' i]",
+  "[class*='product-name' i]", "[class*='productname' i]", "[class*='product-title' i]", "[class*='producttitle' i]",
+  "[class*='line-item' i] a", "[class*='lineitem' i] a", "[data-testid*='product' i][data-testid*='title' i]",
+  "[data-testid*='item' i][data-testid*='name' i]", "[itemprop='name']",
+].join(", ");
+
+function findItemsByText(totalLabel) {
+  let container = totalLabel?.parentElement;
+  for (let i = 0; i < 10 && container; i++, container = container.parentElement) {
+    const seen = new Set();
+    const items = [...container.querySelectorAll(NAME_SELECTOR)]
+      .map((el) => {
+        const name = el.textContent.replace(/\s+/g, " ").trim();
+        // Start above the name element: its own class often contains "item"/"product" too.
+        const row = el.parentElement?.closest("li, tr, [class*='item' i], [class*='product' i]") ?? el.parentElement;
+        return { name, image: null, price: lastMoney(row?.textContent) };
+      })
+      .filter((it) => it.name.length >= 3 && it.name.length <= 160 && !MONEY_RE.test(it.name) && !/^(sub)?total\b/i.test(it.name))
+      .filter((it) => !seen.has(it.name) && seen.add(it.name))
+      .slice(0, 8);
+    MONEY_RE.lastIndex = 0;
+    if (items.length) {
+      const stated = container.textContent.match(/\b(\d{1,3})\s+items?\b/i);
+      return { items: items.map((it) => ({ ...it, name: it.name.slice(0, 120) })), count: stated ? Number(stated[1]) : items.length };
+    }
+  }
   return { items: [], count: null };
 }
 

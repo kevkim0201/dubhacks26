@@ -21,7 +21,9 @@ from app.services.supabase import (
     create_checkout_session,
     record_checkout_decision,
     save_assessment,
+    fill_session_details,
     save_conversation,
+    tag_decision,
 )
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
@@ -36,6 +38,21 @@ class CartItem(BaseModel):
     url: str | None = Field(default=None, max_length=2048)
     image: str | None = Field(default=None, max_length=2048)
     item_key: str | None = Field(default=None, max_length=512)
+    category: str | None = Field(default=None, max_length=60)
+
+
+# The only categories a purchase can have. Gemini must pick one, and the database
+# enforces the same list (migrations/20261018_category_values.sql); change both together.
+CATEGORIES = (
+    "electronics", "clothing", "shoes", "beauty", "home", "kitchen", "food",
+    "health", "sports", "outdoors", "toys", "books", "entertainment", "travel",
+    "office", "pets", "jewelry", "automotive", "other",
+)
+Category = Literal[
+    "electronics", "clothing", "shoes", "beauty", "home", "kitchen", "food",
+    "health", "sports", "outdoors", "toys", "books", "entertainment", "travel",
+    "office", "pets", "jewelry", "automotive", "other",
+]
 
 
 class CheckoutStartRequest(BaseModel):
@@ -74,6 +91,14 @@ class AssessmentRequest(BaseModel):
 
 class DecisionRequest(BaseModel):
     decision: Literal["buy", "save", "skip"]
+    # The cart as the extension sees it at decision time; fills gaps in the session snapshot.
+    store: str | None = Field(default=None, max_length=200)
+    cart_total: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    page_url: str | None = Field(default=None, max_length=2048)
+    items: list[CartItem] = Field(default_factory=list, max_length=100)
+    category: Category | None = None
+    item_name: str | None = Field(default=None, max_length=200)
 
 
 class CheckoutTurnRequest(BaseModel):
@@ -248,9 +273,19 @@ def submit_decision(
     user: AuthUser,
 ) -> dict:
     try:
-        return record_checkout_decision(user.id, session_id, payload.decision)
+        session = fill_session_details(
+            user.id,
+            session_id,
+            {
+                **payload.model_dump(mode="json", exclude={"decision", "items"}, exclude_none=True),
+                "items": [item.model_dump(mode="json", exclude_none=True) for item in payload.items],
+            },
+        )
+        result = record_checkout_decision(user.id, session_id, payload.decision)
+        tag_decision(session_id, category=session.get("category"), item_name=session.get("item_name"))
     except (SupabaseConfigurationError, SupabaseUnavailable, SupabaseAPIError) as exc:
         raise _supabase_http_error(exc, "record your decision") from exc
+    return {**result, "category": session.get("category"), "item_name": session.get("item_name")}
 
 
 class TranscriptEntry(BaseModel):
@@ -272,6 +307,8 @@ class SquirrelVerdictJSON(BaseModel):
     suggestion: Literal["buy", "wait", "skip"]
     reason_summary: str
     closing_line: str
+    item_name: str = Field(description="The main item being bought, from the cart or what the shopper said")
+    category: Category
 
 
 @router.post("/verdict", response_model=SquirrelVerdictJSON)
@@ -300,6 +337,10 @@ async def generate_and_save_verdict(
     {formatted_tx}
 
     Produce the structured JSON verdict evaluating the purchase.
+    Also give item_name (the main item, in a few words; use the conversation if the
+    cart list is empty or generic) and exactly one category from this list:
+    {", ".join(CATEGORIES)}.
+    Use "other" only if nothing fits.
     """
 
     try:
@@ -331,6 +372,8 @@ async def generate_and_save_verdict(
                 closing_line=verdict.closing_line,
                 transcript=[m.model_dump() for m in payload.transcript],
                 duration_seconds=payload.duration_seconds,
+                category=verdict.category,
+                item_name=verdict.item_name,
             )
         except (SupabaseConfigurationError, SupabaseUnavailable, SupabaseAPIError) as exc:
             raise _supabase_http_error(exc, "save the conversation") from exc

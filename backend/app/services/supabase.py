@@ -137,6 +137,8 @@ def save_conversation(
     closing_line: str | None,
     transcript: list[dict[str, str]],
     duration_seconds: int | None,
+    category: str | None = None,
+    item_name: str | None = None,
 ) -> None:
     """Stores Pip's verdict and the conversation on the user's own active session."""
     rows = _request(
@@ -151,11 +153,69 @@ def save_conversation(
             "transcript": transcript,
             "duration_seconds": duration_seconds,
             "conversation_ended_at": datetime.now(timezone.utc).isoformat(),
+            "category": category,
+            "item_name": item_name,
         },
         prefer="return=representation",
     )
     if not isinstance(rows, list) or not rows:
         raise SupabaseAPIError(404, "P0002", "Active checkout session not found")
+
+
+def fill_session_details(user_id: str, session_id: UUID, details: dict[str, Any]) -> dict[str, Any]:
+    """Fills in cart fields the session started without (e.g. items the page didn't
+    expose until later). Never overwrites good data. Returns the updated session."""
+    rows = _request(
+        "GET",
+        "checkout_sessions",
+        params={
+            "id": f"eq.{session_id}",
+            "user_id": f"eq.{user_id}",
+            "select": "id,status,store,cart_total,currency,items,page_url,category,item_name",
+            "limit": "1",
+        },
+    )
+    if not isinstance(rows, list) or not rows:
+        raise SupabaseAPIError(404, "P0002", "Checkout session not found")
+    session = rows[0]
+
+    patch: dict[str, Any] = {}
+    items = details.get("items") or []
+    if len(items) > len(session.get("items") or []):
+        patch["items"] = items
+    if details.get("store") and session.get("store") in (None, "", "Unknown store"):
+        patch["store"] = details["store"]
+    if details.get("cart_total") and float(session.get("cart_total") or 0) == 0:
+        patch["cart_total"] = details["cart_total"]
+    if details.get("page_url") and not session.get("page_url"):
+        patch["page_url"] = details["page_url"]
+    if details.get("category") and not session.get("category"):
+        patch["category"] = details["category"]
+    first_item = (patch.get("items") or session.get("items") or [{}])[0].get("name")
+    if not session.get("item_name") and (details.get("item_name") or first_item):
+        patch["item_name"] = details.get("item_name") or first_item
+
+    if patch and session.get("status") == "active":
+        _request(
+            "PATCH",
+            "checkout_sessions",
+            params={"id": f"eq.{session_id}", "user_id": f"eq.{user_id}", "status": "eq.active"},
+            payload=patch,
+        )
+        session.update(patch)
+    return session
+
+
+def tag_decision(session_id: UUID, *, category: str | None, item_name: str | None) -> None:
+    """Copies category / item name onto the decision row written by record_checkout_decision."""
+    if not category and not item_name:
+        return
+    _request(
+        "PATCH",
+        "decisions",
+        params={"session_id": f"eq.{session_id}"},
+        payload={"category": category, "item_name": item_name},
+    )
 
 
 def record_checkout_decision(

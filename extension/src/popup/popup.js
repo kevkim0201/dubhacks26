@@ -261,7 +261,12 @@ const screens = {
         </div>
       </div>` : ""}
       <p class="fine">${award.acorn_balance} acorns · ${award.total_xp} XP total · ${escape(award.tier)} tier</p>
-      <button class="btn btn-primary" data-action="continue">${icons.arrow(16)}<span>Continue</span></button>
+      ${
+        decision !== "buy" && state.checkout?.tabId
+          ? `<button class="btn btn-primary" data-action="close-checkout">${icons.close(16)}<span>Close this checkout</span></button>
+             <button class="btn btn-outline" data-action="continue">${icons.arrow(16)}<span>Keep it open</span></button>`
+          : `<button class="btn btn-primary" data-action="continue">${icons.arrow(16)}<span>Continue</span></button>`
+      }
     </main>`;
   },
 
@@ -579,7 +584,7 @@ async function endConversation(decision = "buy") {
   let award = null;
   if (state.checkoutSessionId) {
     try {
-      award = await submitCheckoutDecision(state.checkoutSessionId, decision);
+      award = await submitCheckoutDecision(state.checkoutSessionId, decision, state.checkout);
     } catch (e) {
       console.warn("Could not submit decision:", e);
       saveError = !/409|not ready/i.test(String(e?.message))
@@ -673,6 +678,12 @@ const actions = {
     render();
   },
   continue: () => go("companion"),
+  // Skip / wait: close the store tab on the user's say-so (never automatically).
+  async "close-checkout"() {
+    const tabId = state.checkout?.tabId;
+    if (tabId) await chrome.tabs.remove(tabId).catch((e) => console.warn("Could not close checkout tab:", e));
+    window.close();
+  },
   done: () => window.close(),
   "go-talk": () => go("talk"),
   "go-companion": () => go("companion"),

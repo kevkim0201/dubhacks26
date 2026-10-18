@@ -100,8 +100,7 @@ function topbar() {
         ${tab("noop", "Your impact", icons.chart, true)}
         ${tab("open-avatar", "Avatar", icons.sparkle)}
         ${tab("open-quests", "Quests", icons.leaf)}
-        ${tab("open-companion", "Companion", icons.sprout)}
-        ${tab("open-talk", "Talk", icons.wave)}
+        ${tab("open-talk", "Talk to Pip", icons.wave)}
       </nav>
       <div class="top-right">
         ${acornChip(state.progress?.acorns)}
@@ -373,7 +372,6 @@ const actions = {
       render();
     }
   },
-  "open-companion": () => openPopup("companion"),
   "open-talk": () => openPopup("talk"),
   retry: load,
   next() {
