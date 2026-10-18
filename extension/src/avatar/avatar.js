@@ -197,6 +197,7 @@ function header() {
       <nav class="page-nav" aria-label="Nook pages">
         <a href="${chrome.runtime.getURL("dashboard/index.html")}">${icons.chart(16)}<span>Your impact</span></a>
         <a class="active" href="${chrome.runtime.getURL("avatar/index.html")}">${icons.sparkle(16)}<span>Avatar</span></a>
+        <a href="${chrome.runtime.getURL("quests/index.html")}">${icons.leaf(16)}<span>Quests</span></a>
         <button data-action="open-talk">${icons.wave(16)}<span>Talk to Pip</span></button>
       </nav>
       <div class="top-balance">${acornChip(state.acorns)}<span class="tier-pill">${currentTier().name}</span></div>
