@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { getCosmeticsState } from "../lib/cosmetics-api.js";
 import { loadProgress } from "../lib/progress.js";
 import { clearCheckout, saveCheckout, setPopupIntent } from "../lib/checkout.js";
 
@@ -22,7 +23,10 @@ const handlers = {
   async GET_STATUS() {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
-    return { signedIn: !!user, progress: user ? await loadProgress(user.id) : null };
+    if (!user) return { signedIn: false, progress: null, cosmetics: null };
+    const [progress, cosmetics] = await Promise.all([loadProgress(user.id), getCosmeticsState()]);
+    progress.acorns = Number(cosmetics.profile.acorn_balance);
+    return { signedIn: true, userId: user.id, progress, cosmetics };
   },
 
   async CHECKOUT_DETECTED(message, sender) {
@@ -32,6 +36,16 @@ const handlers = {
 
   async CHECKOUT_CLEARED(_message, sender) {
     if (sender.tab?.id) await clearCheckout(sender.tab.id);
+    return { ok: true };
+  },
+
+  async OPEN_DASHBOARD() {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/index.html") });
+    return { ok: true };
+  },
+
+  async OPEN_AVATAR() {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") });
     return { ok: true };
   },
 

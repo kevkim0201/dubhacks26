@@ -55,6 +55,14 @@ recommendation, never a recommendation included in the user's decision request.
 `GET /api/user/state` returns the authenticated user's profile and latest
 decisions.
 
+For persistent avatar cosmetics, apply
+`migrations/20261018_avatar_cosmetics.sql` after the recommendation rewards
+migration. It seeds the shop, grants the Meadow and Acorn starter items, awards
+the Backpack/Bandana/Satchel/Crown gifts on tier-up, and adds service-role-only
+RPCs for atomic purchases and equipment changes. The extension reads the
+authenticated user's `/api/cosmetics` state and uses it to render Pip in the
+closet, popup, dashboard, and checkout overlay.
+
 ## Existing Supabase project
 
 Run `migrations/20261018_conversation_logging.sql` to add the conversation log

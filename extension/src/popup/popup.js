@@ -1,8 +1,9 @@
 import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
 import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
 import { startCheckoutSession, submitCheckoutDecision } from "../lib/checkout-api.js";
+import { loadCosmeticsState } from "../lib/cosmetics-api.js";
 import { applyConversation, loadProgress } from "../lib/progress.js";
-import { icons, squirrel } from "../ui/art.js";
+import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, escape, logo, navBar, progressCard } from "../ui/components.js";
 import { API_BASE_URL } from "../lib/config.js";
 import { apiFetch } from "../lib/api.js";
@@ -15,6 +16,7 @@ const state = {
   screen: "loading", // loading | welcome | talk | conversation | verdict | rewards | companion
   session: null,
   progress: null,
+  cosmetics: null,
   checkout: null, // cart the content script spotted in the active tab
   checkoutSessionId: null,
   error: null,
@@ -319,10 +321,12 @@ function go(screen) {
 
 async function enterApp(session, intent) {
   state.session = session;
-  [state.progress, state.checkout] = await Promise.all([
+  [state.progress, state.checkout, state.cosmetics] = await Promise.all([
     loadProgress(session.user.id),
     getActiveTabCheckout().catch(() => null),
+    loadCosmeticsState(),
   ]);
+  setSquirrelCosmetics(state.cosmetics);
   if (intent === "conversation") {
     // Land on Talk first so a failed start shows its error there, not on the loading screen.
     state.screen = "talk";
@@ -626,11 +630,15 @@ const actions = {
   done: () => window.close(),
   "go-talk": () => go("talk"),
   "go-companion": () => go("companion"),
+  "go-impact": () => chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/index.html") }),
+  "go-avatar": () => chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") }),
   async "sign-out"() {
     voiceEngine.stopAll();
     await signOut();
     state.session = null;
     state.progress = null;
+    state.cosmetics = null;
+    setSquirrelCosmetics(null);
     go("welcome");
   },
   "grant-mic"() {
@@ -685,6 +693,19 @@ app.addEventListener("submit", (e) => {
         handleUserTurn(text);
       }
     }
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  const key = state.session?.user?.id ? `cosmetics:${state.session.user.id}` : "";
+  if (areaName === "local" && key && changes[key]?.newValue) {
+    state.cosmetics = changes[key].newValue;
+    setSquirrelCosmetics(state.cosmetics);
+    state.progress = {
+      ...state.progress,
+      acorns: Number(state.cosmetics.profile.acorn_balance),
+    };
+    render();
   }
 });
 

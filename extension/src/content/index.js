@@ -2,7 +2,7 @@
 // (so the popup can show the cart) and shows Pip's overlay on the page.
 import themeCss from "../ui/theme.css?inline";
 import overlayCss from "./overlay.css?inline";
-import { icons, squirrel } from "../ui/art.js";
+import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, logo, navBar, progressCard } from "../ui/components.js";
 import { readCheckout, scoreCheckout } from "./detect.js";
 
@@ -13,6 +13,8 @@ const quietKey = () => `quiet:${location.hostname}`;
 
 let host = null; // overlay host element (null when hidden)
 let lastSent = null;
+let activeCheckout = null;
+let activeUserId = null;
 let debug = false;
 
 function send(message) {
@@ -95,14 +97,25 @@ function dismissOverlay() {
 function hideOverlay() {
   host?.remove();
   host = null;
+  activeCheckout = null;
+  activeUserId = null;
 }
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && host) dismissOverlay();
 });
 
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "local" && activeCheckout && activeUserId && changes[`cosmetics:${activeUserId}`]) {
+    showOverlay(activeCheckout);
+  }
+});
+
 async function showOverlay(checkout) {
+  activeCheckout = checkout;
   const status = await send({ type: "GET_STATUS" });
+  activeUserId = status?.userId ?? null;
+  setSquirrelCosmetics(status?.cosmetics ?? null);
   ensureFont();
 
   if (!host) {
@@ -115,6 +128,10 @@ async function showOverlay(checkout) {
       } else if (action === "talk" || action === "go-talk") {
         goQuiet();
         openPopup("conversation");
+      } else if (action === "go-impact") {
+        send({ type: "OPEN_DASHBOARD" });
+      } else if (action === "go-avatar") {
+        send({ type: "OPEN_AVATAR" });
       } else if (action === "go-companion") {
         openPopup("companion");
       }

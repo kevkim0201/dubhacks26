@@ -1,4 +1,7 @@
 // Inline SVG art: Pip the squirrel and the small UI icons.
+import { renderScene, SCENE_CSS } from "../../assets/squirrel-assets.js";
+
+let accountCosmetics = null;
 
 const C = {
   blob: "#e4e9d8",
@@ -21,7 +24,28 @@ function sparkle(x, y, s) {
     d="M0 -10 C1 -3 3 -1 10 0 C3 1 1 3 0 10 C-1 3 -3 1 -10 0 C-3 -1 -1 -3 0 -10Z"/>`;
 }
 
+export function setSquirrelCosmetics(cosmetics) {
+  accountCosmetics = cosmetics;
+}
+
 export function squirrel({ scarf = false, sparkles = false } = {}) {
+  if (accountCosmetics?.cosmetics && accountCosmetics?.equipped) {
+    const asset = (slot) => {
+      const id = accountCosmetics.equipped[slot];
+      return accountCosmetics.cosmetics.find((item) => item.id === id)?.asset_key ?? "none";
+    };
+    const tier = accountCosmetics.profile?.tier;
+    const level = { Baby: 1, Scout: 2, Forager: 3, Hoarder: 4, Golden: 5 }[tier] ?? 1;
+    return renderScene({
+      level,
+      background: asset("background") === "none" ? "meadow" : asset("background"),
+      head: asset("head"),
+      neck: asset("neck"),
+      held: asset("held"),
+      effect: asset("effect"),
+      label: `${tier ?? "Baby"} squirrel`,
+    }).replace("</svg>", `<style>${SCENE_CSS}</style></svg>`);
+  }
   return `
 <svg class="pip" viewBox="0 0 220 180" role="img" aria-label="Pip the squirrel">
   <ellipse cx="118" cy="92" rx="88" ry="78" fill="${C.blob}"/>
@@ -113,5 +137,11 @@ export const icons = {
   clock: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', s),
   close: (s) => stroke('<path d="M6 6l12 12M18 6L6 18"/>', s),
   bag: (s) => stroke('<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>', s),
+  chart: (s) => stroke('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', s),
+  wallet: (s) => stroke('<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2"/><path d="M6 6l9-3 2 3"/>', s),
+  leaf: (s) => stroke('<path d="M5 19c0-9 6-14 15-14 0 9-5 15-14 15"/><path d="M5 19c3-4 6-6 10-8"/>', s),
+  calendar: (s) => stroke('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', s),
+  info: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', s),
+  chevron: (s) => stroke('<path d="M6 9l6 6 6-6"/>', s),
   sparkle: (s) => stroke('<path d="M12 3c.8 4.4 2.6 6.2 7 7-4.4.8-6.2 2.6-7 7-.8-4.4-2.6-6.2-7-7 4.4-.8 6.2-2.6 7-7z"/>', s),
 };

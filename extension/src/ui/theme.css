@@ -160,11 +160,24 @@
   height: auto;
 }
 
+.sq-scene {
+  width: 220px;
+  height: auto;
+}
+
 .art-sm .pip {
   width: 170px;
 }
 
+.art-sm .sq-scene {
+  width: 170px;
+}
+
 .art-xs .pip {
+  width: 140px;
+}
+
+.art-xs .sq-scene {
   width: 140px;
 }
 
@@ -336,7 +349,7 @@
 .bottom-nav {
   flex: none;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 10px 14px 12px;
   border-top: 1px solid var(--border);

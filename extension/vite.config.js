@@ -13,6 +13,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: resolve(__dirname, "src/popup/index.html"),
+        dashboard: resolve(__dirname, "src/dashboard/index.html"),
+        avatar: resolve(__dirname, "src/avatar/index.html"),
         background: resolve(__dirname, "src/background/index.js"),
       },
       output: {
