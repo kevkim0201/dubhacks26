@@ -7,6 +7,7 @@ import { acornChip, cartCard, escape, logo, navBar, progressCard } from "../ui/c
 import { API_BASE_URL } from "../lib/config.js";
 import { apiFetch } from "../lib/api.js";
 import { voiceEngine } from "../lib/voice.js";
+import { startSquirrelVoiceSession } from "../lib/voiceSession.js";
 
 const app = document.getElementById("app");
 
@@ -32,6 +33,7 @@ const state = {
   recommendation: null, // e.g. "Wait 24 hours" / "Go for it", from the voice agent
   micBlocked: false,
   grantMicStatus: null,
+  activeVoiceSession: null,
 };
 
 voiceEngine.onStateChange = ({ isSpeaking, isListening }) => {
@@ -377,27 +379,17 @@ async function startConversation() {
   render();
 
   try {
-    let session = null;
-    try {
-      session = await startCheckoutSession(state.checkout);
-    } catch (e) {
-      console.warn("Backend session creation deferred or guest mode:", e);
-      session = {
-        session_id: null,
-        opening_line: state.checkout?.items?.[0]?.name
-          ? `Ooh, ${state.checkout.total ?? ""} for ${state.checkout.items[0].name}! Why do you need this today?`
-          : "“Why do you need this purchase today?”",
-        audio_url: `/api/checkout/voice/speak?text=${encodeURIComponent("Why do you need this purchase today?")}`,
-      };
-    }
+    const rawTotal = String(state.checkout?.total ?? "").replace(/[^0-9.]/g, "") || "0";
+    const cartItems = state.checkout?.items?.map((i) => i.name).filter(Boolean).join(", ") ||
+                      state.checkout?.store ||
+                      "Items in cart";
+    const cartTotal = state.checkout?.total ? String(state.checkout.total) : `$${rawTotal}`;
 
-    state.checkoutSessionId = session?.session_id ?? null;
-    state.subtitle = session?.opening_line || "“Why do you need this purchase today?”";
-    state.userTranscript = "";
-    state.turnCount = 0;
     state.startedAt = Date.now();
     state.micOn = true;
     state.recommendation = null;
+    state.userTranscript = "";
+    state.subtitle = "Connecting with Pip…";
     clearInterval(state.timer);
     state.timer = setInterval(() => {
       const el = document.getElementById("timer");
@@ -406,12 +398,91 @@ async function startConversation() {
 
     go("conversation");
 
-    if (session?.audio_url) {
-      await voiceEngine.playAudio(`${API_BASE_URL}${session.audio_url}`);
-    }
-
-    if (state.micOn && state.screen === "conversation") {
-      listenForUser();
+    try {
+      state.activeVoiceSession = await startSquirrelVoiceSession(
+        { items: cartItems, total: cartTotal },
+        {
+          onTranscript: (entry) => {
+            if (entry.role === "squirrel") {
+              state.subtitle = entry.text;
+              const qEl = document.getElementById("pip-quote");
+              if (qEl) qEl.textContent = entry.text;
+            } else {
+              state.userTranscript = entry.text;
+              const tEl = document.getElementById("user-transcript-live");
+              if (tEl) tEl.textContent = `You: “${entry.text}”`;
+            }
+          },
+          onModeChange: (mode) => {
+            state.speaking = mode === "speaking";
+            state.listening = mode === "listening";
+            const waveEl = document.querySelector(".wave");
+            if (waveEl) waveEl.className = `wave ${mode === "speaking" || mode === "listening" ? "" : "paused"}`;
+            const statusEl = document.getElementById("conv-status-text");
+            if (statusEl) {
+              if (mode === "speaking") {
+                statusEl.className = "conversation-status speaking";
+                statusEl.textContent = "🔊 Pip is speaking…";
+              } else if (mode === "listening") {
+                statusEl.className = "conversation-status";
+                statusEl.textContent = "🎤 Listening… speak into your microphone";
+              } else {
+                statusEl.className = "conversation-status paused";
+                statusEl.textContent = "Thinking…";
+              }
+            }
+          },
+          onVerdict: (verdict) => {
+            if (verdict?.suggestion) {
+              state.recommendation =
+                verdict.suggestion === "buy" ? "Go for it" :
+                verdict.suggestion === "wait" ? "Wait 24h" : "Skip purchase";
+            }
+            if (verdict?.closing_line) {
+              state.subtitle = verdict.closing_line;
+            }
+            render();
+          },
+          onError: (err) => {
+            console.warn("ElevenLabs Agent error:", err);
+            const errStr = String(err?.message || err);
+            if (errStr.includes("NotAllowedError") || errStr.includes("permission")) {
+              state.micBlocked = true;
+              render();
+            }
+          },
+        }
+      );
+    } catch (wsErr) {
+      console.warn("ElevenLabs WebSocket agent failed, using local voice fallback:", wsErr);
+      const errStr = String(wsErr?.message || wsErr);
+      if (errStr.includes("NotAllowedError") || errStr.includes("permission")) {
+        state.micBlocked = true;
+        render();
+        return;
+      }
+      // Fallback to local TTS + SpeechRecognition engine
+      let session = null;
+      try {
+        session = await startCheckoutSession(state.checkout);
+      } catch (e) {
+        session = {
+          session_id: null,
+          opening_line: state.checkout?.items?.[0]?.name
+            ? `Ooh, ${state.checkout.total ?? ""} for ${state.checkout.items[0].name}! Why do you need this today?`
+            : "“Why do you need this purchase today?”",
+          audio_url: `/api/checkout/voice/speak?text=${encodeURIComponent("Why do you need this purchase today?")}`,
+        };
+      }
+      state.checkoutSessionId = session?.session_id ?? null;
+      state.subtitle = session?.opening_line || "“Why do you need this purchase today?”";
+      render();
+      if (session?.audio_url) {
+        await voiceEngine.playAudio(`${API_BASE_URL}${session.audio_url}`);
+      }
+      if (state.micOn && state.screen === "conversation") {
+        listenForUser();
+      }
     }
   } catch (err) {
     state.error = err?.message ?? String(err);
@@ -424,6 +495,14 @@ async function startConversation() {
 
 async function endConversation(decision = "buy") {
   clearInterval(state.timer);
+  if (state.activeVoiceSession) {
+    try {
+      await state.activeVoiceSession.stopSession();
+    } catch (e) {
+      console.warn("Error stopping voice session:", e);
+    }
+    state.activeVoiceSession = null;
+  }
   voiceEngine.stopAll();
 
   if (state.checkoutSessionId && state.checkoutSessionId !== "demo-session") {
@@ -462,9 +541,12 @@ const actions = {
   "decide-skip": () => endConversation("skip"),
   "toggle-mic"() {
     state.micOn = !state.micOn;
+    if (state.activeVoiceSession?.conversation?.setMicMuted) {
+      state.activeVoiceSession.conversation.setMicMuted(!state.micOn);
+    }
     if (!state.micOn) {
       voiceEngine.stopListening();
-    } else {
+    } else if (!state.activeVoiceSession) {
       listenForUser();
     }
     render();
@@ -523,7 +605,14 @@ app.addEventListener("submit", (e) => {
     const text = input?.value?.trim();
     if (text) {
       input.value = "";
-      handleUserTurn(text);
+      if (state.activeVoiceSession?.conversation?.sendUserMessage) {
+        state.userTranscript = text;
+        const tEl = document.getElementById("user-transcript-live");
+        if (tEl) tEl.textContent = `You: “${text}”`;
+        state.activeVoiceSession.conversation.sendUserMessage(text);
+      } else {
+        handleUserTurn(text);
+      }
     }
   }
 });
