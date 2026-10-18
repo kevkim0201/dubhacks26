@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acorn Outfitters — Conscious Shopping Demo</title>
+  <link rel="stylesheet" href="store.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="store-header">
+    <a href="index.html" class="brand">
+      <div class="brand-icon">🌰</div>
+      <div>
+        <div class="brand-title">Acorn Outfitters</div>
+        <div class="brand-subtitle">DubHacks '26 Demo Store</div>
+      </div>
+    </a>
+    <div class="nav-actions">
+      <button id="open-cart-btn" class="cart-button">
+        <span>Cart</span>
+        <span id="cart-counter" class="badge">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Hero Highlight Banner -->
+  <section class="hero-banner">
+    <div class="hero-content">
+      <div>
+        <span class="hero-tag">DubHacks '26 Reimagine Shopping</span>
+        <h1 class="hero-title">Every loyalty program rewards spending.<br>We reward spending well.</h1>
+        <p class="hero-desc">
+          Add items to your cart and proceed to checkout. Watch your AI squirrel companion intercept impulse buys with gentle reflection, awarding acorns whether you buy, wait, or skip.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Product Catalog -->
+  <main class="catalog-container">
+    <h2 class="section-title">Featured Gear & Tech</h2>
+    <div id="product-grid" class="product-grid">
+      <!-- Populated dynamically via JS -->
+    </div>
+  </main>
+
+  <!-- Cart Slide-Out Drawer -->
+  <div id="cart-overlay" class="cart-drawer-overlay"></div>
+  <aside id="cart-drawer" class="cart-drawer">
+    <div class="drawer-header">
+      <h3 class="drawer-title">Your Cart</h3>
+      <button id="close-cart-btn" class="close-drawer">&times;</button>
+    </div>
+    <div id="drawer-items" class="drawer-items">
+      <!-- Populated via JS -->
+    </div>
+    <div class="drawer-footer">
+      <div class="subtotal-row">
+        <span>Subtotal</span>
+        <span id="drawer-subtotal" class="subtotal-value">$0.00</span>
+      </div>
+      <a href="checkout.html" id="proceed-checkout-btn" class="checkout-link-btn">
+        Proceed to Checkout
+      </a>
+    </div>
+  </aside>
+
+  <script src="products.js"></script>
+  <script>
+    const grid = document.getElementById("product-grid");
+    const cartCounter = document.getElementById("cart-counter");
+    const cartOverlay = document.getElementById("cart-overlay");
+    const cartDrawer = document.getElementById("cart-drawer");
+    const drawerItems = document.getElementById("drawer-items");
+    const drawerSubtotal = document.getElementById("drawer-subtotal");
+    const openCartBtn = document.getElementById("open-cart-btn");
+    const closeCartBtn = document.getElementById("close-cart-btn");
+
+    function renderCatalog() {
+      grid.innerHTML = PRODUCTS.map(p => `
+        <div class="product-card">
+          <span class="product-tag">${p.tag}</span>
+          <div class="product-icon-wrap">${p.icon}</div>
+          <div class="product-meta">
+            <span class="product-cat">${p.category}</span>
+            <span class="product-rating">★ ${p.rating} (${p.reviews})</span>
+          </div>
+          <h3 class="product-name">${p.name}</h3>
+          <p class="product-desc">${p.description}</p>
+          <div class="product-footer">
+            <span class="product-price">$${p.price.toFixed(2)}</span>
+            <button class="add-btn" onclick="addToCart('${p.id}')">Add to Cart</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function renderCart() {
+      const cart = window.cartManager.cart;
+      cartCounter.textContent = window.cartManager.getCount();
+
+      if (cart.length === 0) {
+        drawerItems.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px 0;">Your cart is empty. Pick an item above to test the checkout experience!</div>`;
+        drawerSubtotal.textContent = "$0.00";
+        return;
+      }
+
+      drawerItems.innerHTML = cart.map(item => `
+        <div class="cart-row">
+          <div class="cart-row-icon">${item.icon}</div>
+          <div class="cart-row-info">
+            <div class="cart-row-name">${item.name}</div>
+            <div class="cart-row-price">$${item.price.toFixed(2)}</div>
+          </div>
+          <div class="cart-row-controls">
+            <button class="qty-btn" onclick="updateQty('${item.id}', ${item.qty - 1})">-</button>
+            <span class="qty-count">${item.qty}</span>
+            <button class="qty-btn" onclick="updateQty('${item.id}', ${item.qty + 1})">+</button>
+          </div>
+        </div>
+      `).join("");
+
+      drawerSubtotal.textContent = "$" + window.cartManager.getTotal().toFixed(2);
+    }
+
+    window.addToCart = function(id) {
+      window.cartManager.addItem(id);
+      renderCart();
+      openDrawer();
+    };
+
+    window.updateQty = function(id, qty) {
+      window.cartManager.updateQty(id, qty);
+      renderCart();
+    };
+
+    function openDrawer() {
+      cartDrawer.classList.add("open");
+      cartOverlay.classList.add("open");
+    }
+
+    function closeDrawer() {
+      cartDrawer.classList.remove("open");
+      cartOverlay.classList.remove("open");
+    }
+
+    openCartBtn.addEventListener("click", openDrawer);
+    closeCartBtn.addEventListener("click", closeDrawer);
+    cartOverlay.addEventListener("click", closeDrawer);
+
+    // Initial render
+    renderCatalog();
+    renderCart();
+
+    // Auto-seed sample item if cart is empty so demo is ready out of the box
+    if (window.cartManager.cart.length === 0) {
+      window.cartManager.addItem("prod-headphones");
+      renderCart();
+    }
+  </script>
+</body>
+</html>
