@@ -29,12 +29,27 @@ Copy the extension ID and add its redirect URL to Supabase (step 1.3).
 > The ID of an unpacked extension depends on its folder path. To pin it across machines,
 > add a `"key"` field to `public/manifest.json`.
 
+### Trying the checkout flow
+
+```bash
+cd extension && npm run demo   # serves a fake store at http://localhost:4321/checkout.html
+```
+
+Open that page with the extension loaded and Pip's overlay appears in the corner. The
+content script (`src/content/`) treats a page as a checkout when the URL contains
+`checkout`/`payment`, the page has card inputs (`autocomplete="cc-*"`), or an
+`h1`/`h2` starts with "Checkout". It reads the store name, total and item images
+heuristically, so add site-specific extractors in `src/content/detect.js` as needed.
+
 Code layout:
 
 - `src/lib/supabase.js` – Supabase client, session stored in `chrome.storage.local`
 - `src/lib/auth.js` – `signInWithGoogle()` via `chrome.identity.launchWebAuthFlow` (PKCE)
 - `src/lib/api.js` – `apiFetch(path)` adds `Authorization: Bearer <access_token>`
-- `src/popup/` – popup UI, `src/background/` – service worker
+- `src/popup/` – popup screens, `src/background/` – service worker (messages, opens popup)
+- `src/content/` – checkout detection + in-page overlay (built separately as an IIFE)
+- `src/ui/` – shared Pip art, components and theme used by popup and overlay
+- `src/lib/progress.js` – XP / levels / acorns, `src/lib/checkout.js` – per-tab cart storage
 
 ## 3. FastAPI backend
 

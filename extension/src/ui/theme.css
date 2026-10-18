@@ -1,0 +1,375 @@
+/* Shared by the popup and the in-page overlay (inside a shadow root).
+   Everything is scoped under .nook so it never leaks into host pages. */
+
+.nook {
+  --bg: #fbf7ee;
+  --card: #fffdf8;
+  --border: #ebe5d6;
+  --text: #283a2f;
+  --muted: #7b7a6c;
+  --green: #2f4f3e;
+  --green-hover: #263f32;
+  --green-soft: #e6ead9;
+  --green-card: #eef1e4;
+  --gold-soft: #f4e8c6;
+  --gold-text: #8a5a2b;
+  --track: #e9e5da;
+  --error: #b42318;
+  --error-bg: #fdecea;
+
+  font-family: "Nook Nunito", "Nunito", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.nook *,
+.nook *::before,
+.nook *::after {
+  box-sizing: border-box;
+}
+
+.nook button {
+  font: inherit;
+  color: inherit;
+}
+
+.nook h1,
+.nook h2,
+.nook p {
+  margin: 0;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.logo-label {
+  margin-left: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tagline {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.acorn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: var(--gold-text);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* ---------- text ---------- */
+
+.title-lg {
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.title {
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.title-md {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.center-text {
+  text-align: center;
+}
+
+.fine {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ---------- Pip ---------- */
+
+.art {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.pip {
+  width: 220px;
+  height: auto;
+}
+
+.art-sm .pip {
+  width: 170px;
+}
+
+.art-xs .pip {
+  width: 140px;
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  margin-top: 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--green);
+  color: #fff !important;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--green-hover);
+}
+
+.btn-outline {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: #f6f1e5;
+}
+
+.link {
+  align-self: center;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted) !important;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- progress ---------- */
+
+.progress {
+  margin-top: 4px;
+}
+
+.progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.progress-row span {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.bar {
+  height: 6px;
+  margin: 7px 0 6px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+  transition: width 0.6s ease;
+}
+
+.footnote {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- cart ---------- */
+
+.cart {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--green-card);
+}
+
+.cart-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cart-head strong {
+  color: var(--text);
+}
+
+.cart-total {
+  font-size: 12px;
+}
+
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cart-item > div {
+  display: grid;
+  min-width: 0;
+}
+
+.cart-item strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cart-item .muted {
+  font-size: 11px;
+}
+
+.cart-price {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold-text);
+}
+
+.thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--card);
+}
+
+.thumb-empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+/* ---------- bottom nav ---------- */
+
+.bottom-nav {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted) !important;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nav-tab.active {
+  background: var(--green-soft);
+  color: var(--green) !important;
+  font-weight: 800;
+}
+
+/* ---------- errors ---------- */
+
+.error {
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 12px;
+}

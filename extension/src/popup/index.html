@@ -2,26 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>DubHacks26</title>
+    <title>Nook</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
-    <main>
-      <h1>DubHacks26</h1>
-
-      <section id="signed-out" hidden>
-        <button id="sign-in">Sign in with Google</button>
-      </section>
-
-      <section id="signed-in" hidden>
-        <p>Signed in as <strong id="user-email"></strong></p>
-        <button id="call-api">Call /me</button>
-        <button id="sign-out" class="secondary">Sign out</button>
-        <pre id="api-output"></pre>
-      </section>
-
-      <p id="error" class="error" hidden></p>
-    </main>
+    <div id="app" class="nook app"></div>
     <script type="module" src="./popup.js"></script>
   </body>
 </html>
