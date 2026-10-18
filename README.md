@@ -35,11 +35,22 @@ Copy the extension ID and add its redirect URL to Supabase (step 1.3).
 cd extension && npm run demo   # serves a fake store at http://localhost:4321/checkout.html
 ```
 
-Open that page with the extension loaded and Pip's overlay appears in the corner. The
-content script (`src/content/`) treats a page as a checkout when the URL contains
-`checkout`/`payment`, the page has card inputs (`autocomplete="cc-*"`), or an
-`h1`/`h2` starts with "Checkout". It reads the store name, total and item images
-heuristically, so add site-specific extractors in `src/content/detect.js` as needed.
+Open that page with the extension loaded and Pip's overlay appears in the corner.
+
+How detection works (`src/content/`):
+
+- `sites.js` – known stores/platforms (Amazon, Shopify, Walmart, Target, Best Buy, eBay,
+  Etsy, Stripe, PayPal, WooCommerce, Magento, BigCommerce) count as a checkout outright.
+- `detect.js` – everything else is scored: checkout URL, card fields or card iframes,
+  place-order buttons, checkout headings, address fields and an order total each add
+  points; article pages lose points. 5+ points = checkout.
+- After "Not now" or "Talk to Pip", the overlay stays quiet on that site for 30 minutes
+  so multi-step checkouts don't re-pop it.
+- `npm test` runs fixture tests (`detect.test.js`). Add a fixture when a real site misfires.
+
+Debugging on a real site: open the service worker console from `chrome://extensions` and run
+`chrome.storage.local.set({ nookDebug: true })`, reload the store page, and its console will
+log `[Nook] score …` with the reasons and the cart Pip read.
 
 Code layout:
 
