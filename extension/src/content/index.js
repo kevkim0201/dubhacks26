@@ -192,6 +192,9 @@ async function showOverlay(checkout) {
       const action = e.target.closest("[data-action]")?.dataset.action;
       if (action === "close") {
         dismissOverlay();
+      } else if (action === "close-deals-modal") {
+        const modal = host?.shadowRoot.querySelector(".deals-modal-backdrop");
+        if (modal) modal.remove();
       } else if (action === "talk" || action === "go-talk") {
         openPopup("conversation");
       } else if (action === "go-impact") {
@@ -207,6 +210,77 @@ async function showOverlay(checkout) {
 
   render();
 }
+
+function showDealsModal(deals, summary) {
+  if (!host?.shadowRoot) return;
+  const existing = host.shadowRoot.querySelector(".deals-modal-backdrop");
+  if (existing) existing.remove();
+
+  const modalHtml = `
+    <div class="deals-modal-backdrop" role="dialog" aria-modal="true" aria-label="Better Deals Found">
+      <div class="deals-modal">
+        <header class="deals-modal-header">
+          <div class="swaps-title">
+            <span class="swaps-sparkle">✨</span>
+            <strong>Pip & TypeSafe Jev Deal Finder</strong>
+          </div>
+          <button class="icon-btn" data-action="close-deals-modal" aria-label="Close">${icons.close(14)}</button>
+        </header>
+        <div class="deals-modal-body">
+          <div class="deals-alert">
+            <span class="deals-alert-icon">🐿️</span>
+            <div>
+              <strong>Better Deals Found Before You Buy!</strong>
+              <p>${escape(summary || "You chose to buy, and Pip approved! Before paying full price, Jev scraped these cheaper listings online:")}</p>
+            </div>
+          </div>
+          <div class="swaps-list">
+            ${deals.map((d) => `
+              <div class="swap-item">
+                <div class="swap-item-header">
+                  <span class="swap-product-name" title="${escape(d.title)}">${escape(d.title)}</span>
+                  <div class="swap-tags">
+                    <span class="swap-price">$${Number(d.price).toFixed(2)}</span>
+                    ${d.estimated_savings > 0 ? `<span class="swap-savings">Save $${Number(d.estimated_savings).toFixed(2)}</span>` : ""}
+                  </div>
+                </div>
+                <div class="swap-seller-row">
+                  <span class="swap-seller-badge">${escape(d.seller)}</span>
+                </div>
+                ${d.pip_reason ? `<p class="swap-advice">🐿️ “${escape(d.pip_reason)}”</p>` : ""}
+                <div class="swap-actions">
+                  <button class="swap-btn" data-action="view-swap" data-swap-id="${escape(d.id)}" data-url="${escape(d.url)}" data-title="${escape(d.title)}">
+                    <span>View Listing</span>
+                    <span class="swap-btn-icon">↗</span>
+                  </button>
+                  <span class="swap-reward-hint">+10 🌰 on check</span>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+          <div class="deals-modal-actions">
+            <button class="btn btn-primary" data-action="close-deals-modal">
+              <span>Got it, thanks Pip!</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  host.shadowRoot.insertAdjacentHTML("beforeend", modalHtml);
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "SHOW_BUY_DEALS_POPUP") {
+    ensureFont();
+    if (!host) {
+      showOverlay(message.checkout || activeCheckout || { store: location.hostname, total: "0", items: [] });
+    }
+    showDealsModal(message.deals || [], message.summary || "");
+    sendResponse({ ok: true });
+    return true;
+  }
+});
 
 async function scan() {
   const url = new URL(location.href);

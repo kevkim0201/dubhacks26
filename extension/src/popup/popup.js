@@ -1,8 +1,8 @@
 import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
 import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
-import { startCheckoutSession, submitCheckoutDecision } from "../lib/checkout-api.js";
+import { fetchBuyDeals, startCheckoutSession, submitCheckoutDecision, trackSwapClick } from "../lib/checkout-api.js";
 import { loadCosmeticsState } from "../lib/cosmetics-api.js";
-import { progressFromProfile } from "../lib/progress.js";
+import { applySwapBonus, progressFromProfile } from "../lib/progress.js";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, escape, logo, navBar, pageMenu, progressCard } from "../ui/components.js";
 import { API_BASE_URL } from "../lib/config.js";
@@ -34,6 +34,8 @@ const state = {
   result: null,
   recommendation: null, // e.g. "Wait 24 hours" / "Go for it", from the voice agent
   suggestion: null, // raw verdict from the backend: "buy" | "wait" | "skip"
+  scrapedDeals: [],
+  dealsSummary: "",
   endedAt: 0, // when the call ended, so time on the verdict screen doesn't count as talk time
   micBlocked: false,
   grantMicStatus: null,
@@ -232,6 +234,51 @@ const screens = {
         ${choice("decide-skip", "Skip it", "Keep the money in your pocket")}
       </div>
       <p class="fine">You earn acorns for reflecting, whatever you choose.</p>
+    </main>`;
+  },
+
+  deals: () => {
+    const deals = state.scrapedDeals || [];
+    return `
+    ${header()}
+    <main class="screen">
+      <div class="swaps-header" style="margin-bottom:6px;">
+        <div class="swaps-title">
+          <span class="swaps-sparkle">✨</span>
+          <strong>Pip & Jev Deal Finder</strong>
+        </div>
+        <span class="swaps-pill-save">Web Scraper Active</span>
+      </div>
+      <h1 class="title-md">Better Deals Found Online!</h1>
+      <p class="muted center-text sub">You chose to buy, and Pip approved! Before paying full price, Jev scraped these cheaper listings:</p>
+
+      <div class="swaps-list" style="margin: 10px 0;">
+        ${deals.map((d) => `
+          <div class="swap-item">
+            <div class="swap-item-header">
+              <span class="swap-product-name" title="${escape(d.title)}">${escape(d.title)}</span>
+              <div class="swap-tags">
+                <span class="swap-price">$${Number(d.price).toFixed(2)}</span>
+                ${d.estimated_savings > 0 ? `<span class="swap-savings">Save $${Number(d.estimated_savings).toFixed(2)}</span>` : ""}
+              </div>
+            </div>
+            <div class="swap-seller-row" style="margin:2px 0;">
+              <span class="swap-seller-badge">${escape(d.seller)}</span>
+            </div>
+            ${d.pip_reason ? `<p class="swap-advice">🐿️ “${escape(d.pip_reason)}”</p>` : ""}
+            <div class="swap-actions">
+              <button class="swap-btn" data-action="view-deal-link" data-url="${escape(d.url)}" data-id="${escape(d.id)}" data-title="${escape(d.title)}">
+                <span>View Listing</span>
+                <span class="swap-btn-icon">↗</span>
+              </button>
+              <span class="swap-reward-hint">+10 🌰 on check</span>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      <button class="btn btn-primary" data-action="confirm-rewards">${icons.arrow(16)}<span>Continue to Rewards</span></button>
+      <p class="fine">Check these deals in a new tab before buying!</p>
     </main>`;
   },
 
@@ -662,7 +709,46 @@ const actions = {
   },
   start: startConversation,
   end: stopAndShowVerdict,
-  "decide-buy": () => endConversation("buy"),
+  "decide-buy": async () => {
+    if (state.suggestion === "buy") {
+      state.busy = true;
+      render();
+      const itemName = state.checkout?.items?.[0]?.name || "Item";
+      const cartTotal = state.checkout?.total || 0;
+      const storeDomain = state.checkout?.store || "unknown";
+      try {
+        const dealsRes = await fetchBuyDeals({
+          itemName,
+          cartTotal,
+          storeDomain,
+          verdict: "buy",
+          decision: "buy",
+        });
+        if (dealsRes?.deals?.length > 0) {
+          state.scrapedDeals = dealsRes.deals;
+          state.dealsSummary = dealsRes.summary;
+
+          if (state.checkout?.tabId) {
+            chrome.tabs.sendMessage(state.checkout.tabId, {
+              type: "SHOW_BUY_DEALS_POPUP",
+              deals: dealsRes.deals,
+              summary: dealsRes.summary,
+              checkout: state.checkout,
+            }).catch(() => null);
+          }
+
+          state.busy = false;
+          go("deals");
+          return;
+        }
+      } catch (err) {
+        console.warn("Could not fetch buy deals from Jev:", err);
+      }
+      state.busy = false;
+    }
+    await endConversation("buy");
+  },
+  "confirm-rewards": () => endConversation("buy"),
   "decide-wait": () => endConversation("save"),
   "decide-skip": () => endConversation("skip"),
   "toggle-mic"() {
@@ -757,6 +843,24 @@ app.addEventListener("click", (e) => {
     return render();
   }
   if (!button || button.disabled) return;
+  const viewDealBtn = e.target.closest('[data-action="view-deal-link"]');
+  if (viewDealBtn) {
+    const url = viewDealBtn.dataset.url;
+    const id = viewDealBtn.dataset.id;
+    const title = viewDealBtn.dataset.title;
+    if (url) {
+      chrome.tabs.create({ url });
+    }
+    if (state.session?.user?.id) {
+      applySwapBonus(state.session.user.id, id, { searchUrl: url, title }).then((updatedProgress) => {
+        if (updatedProgress) {
+          state.progress = updatedProgress;
+          render();
+        }
+      });
+    }
+    return;
+  }
   Promise.resolve(actions[button.dataset.action]?.()).catch((err) => {
     console.error(err);
     state.error = err?.message ?? String(err);

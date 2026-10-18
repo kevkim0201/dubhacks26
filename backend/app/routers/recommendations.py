@@ -2,8 +2,13 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.core.auth import OptionalAuthUser
-from app.schemas.recommendations import RecommendationsRequest, RecommendationsResponse
-from app.services.jev_recommender import run_jev_recommender
+from app.schemas.recommendations import (
+    BuyDealsRequest,
+    BuyDealsResponse,
+    RecommendationsRequest,
+    RecommendationsResponse,
+)
+from app.services.jev_recommender import get_buy_verdict_deals, run_jev_recommender
 
 router = APIRouter(prefix="/api/checkout/recommendations", tags=["recommendations"])
 
@@ -17,6 +22,17 @@ async def get_checkout_recommendations(
     user_id = user.id if user else "guest"
     print(f"[Jev Recommender] User '{user_id}' checking alternatives on {payload.store_domain} (total ${payload.total_cost:.2f})")
     return await run_jev_recommender(payload)
+
+
+@router.post("/buy-deals", response_model=BuyDealsResponse)
+async def get_buy_decision_deals(
+    payload: BuyDealsRequest,
+    user: OptionalAuthUser,
+) -> BuyDealsResponse:
+    """When a shopper decides to BUY on a BUY verdict, TypeSafe Jev scrapes the web for live better deals."""
+    user_id = user.id if user else "guest"
+    print(f"[TypeSafe Jev] Buy verdict & Buy decision received for '{payload.item_name}' (${payload.cart_total:.2f}). Scraping web deals...")
+    return await get_buy_verdict_deals(payload)
 
 
 class RecommendationClickRequest(BaseModel):

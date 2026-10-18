@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     # Google retires older models for new keys; override in .env if this one goes away.
     gemini_model: str = "gemini-3.8-flash"
+    typesafe_api_key: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

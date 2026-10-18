@@ -86,3 +86,17 @@ export async function trackSwapClick(recommendationId, searchUrl, title = null) 
   }
 }
 
+export async function fetchBuyDeals({ itemName, cartTotal, storeDomain, verdict = "buy", decision = "buy" }) {
+  const rawTotal = typeof cartTotal === "number" ? cartTotal : parseFloat(String(cartTotal || 0).replace(/[^\d.]/g, "")) || 0;
+  return apiFetch("/api/checkout/recommendations/buy-deals", {
+    method: "POST",
+    body: JSON.stringify({
+      item_name: itemName || "item",
+      cart_total: rawTotal,
+      store_domain: storeDomain || "unknown",
+      verdict,
+      decision,
+    }),
+  });
+}
+
