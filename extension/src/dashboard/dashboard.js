@@ -99,6 +99,7 @@ function topbar() {
       <nav class="top-tabs" aria-label="Nook">
         ${tab("noop", "Your impact", icons.chart, true)}
         ${tab("open-avatar", "Avatar", icons.sparkle)}
+        ${tab("open-quests", "Quests", icons.leaf)}
         ${tab("open-companion", "Companion", icons.sprout)}
         ${tab("open-talk", "Talk", icons.wave)}
       </nav>
@@ -362,6 +363,7 @@ async function openPopup(screen) {
 
 const actions = {
   "open-avatar": () => chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") }),
+  "open-quests": () => chrome.tabs.create({ url: chrome.runtime.getURL("quests/index.html") }),
   async google() {
     try {
       state.session = await signInWithGoogle();
