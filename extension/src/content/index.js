@@ -4,19 +4,33 @@ import themeCss from "../ui/theme.css?inline";
 import overlayCss from "./overlay.css?inline";
 import { icons, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, logo, navBar, progressCard } from "../ui/components.js";
-import { looksLikeCheckout, readCheckout } from "./detect.js";
+import { readCheckout, scoreCheckout } from "./detect.js";
+
+// After "Not now" or "Talk to Pip", stay quiet on this site for a while so
+// multi-step checkouts (shipping → payment → review) don't re-pop the overlay.
+const QUIET_MS = 30 * 60 * 1000;
+const quietKey = () => `quiet:${location.hostname}`;
 
 let host = null; // overlay host element (null when hidden)
-let dismissedUrl = null;
 let lastSent = null;
+let debug = false;
 
 function send(message) {
   try {
-    return chrome.runtime.sendMessage(message);
+    return chrome.runtime.sendMessage(message).catch(() => null);
   } catch {
     // Extension was reloaded; this content script is orphaned.
     return Promise.resolve(null);
   }
+}
+
+async function isQuiet() {
+  const { [quietKey()]: until = 0 } = await chrome.storage.local.get(quietKey());
+  return Date.now() < until;
+}
+
+function goQuiet() {
+  chrome.storage.local.set({ [quietKey()]: Date.now() + QUIET_MS });
 }
 
 // @font-face doesn't work inside shadow roots, so register the font on the page.
@@ -74,7 +88,7 @@ async function openPopup(screen) {
 }
 
 function dismissOverlay() {
-  dismissedUrl = location.href;
+  goQuiet();
   hideOverlay();
 }
 
@@ -99,6 +113,7 @@ async function showOverlay(checkout) {
       if (action === "close") {
         dismissOverlay();
       } else if (action === "talk" || action === "go-talk") {
+        goQuiet();
         openPopup("conversation");
       } else if (action === "go-companion") {
         openPopup("companion");
@@ -109,34 +124,50 @@ async function showOverlay(checkout) {
   host.shadowRoot.innerHTML = `<style>${themeCss}${overlayCss}</style>${panelHtml(checkout, status)}`;
 }
 
-function scan() {
-  if (!looksLikeCheckout()) {
+async function scan() {
+  const url = new URL(location.href);
+  const result = scoreCheckout(document, url);
+  if (debug) console.debug("[Nook] score", result.score, result.isCheckout ? "→ checkout" : "", result.reasons);
+
+  if (!result.isCheckout) {
     if (lastSent !== "none") send({ type: "CHECKOUT_CLEARED" });
     lastSent = "none";
     hideOverlay();
     return;
   }
 
-  const checkout = readCheckout();
+  const checkout = readCheckout(document, url, result.site);
+  if (debug) console.debug("[Nook] cart", checkout);
   const key = JSON.stringify(checkout);
   if (key === lastSent) return;
   lastSent = key;
 
   send({ type: "CHECKOUT_DETECTED", checkout });
-  if (dismissedUrl !== location.href) showOverlay(checkout);
+  if (host || !(await isQuiet())) showOverlay(checkout);
 }
 
-// Re-scan when the page changes (SPAs, carts that load late), debounced.
+// Re-scan when the page changes (SPAs, carts that load late). Debounced, but
+// forced at least every 2s so pages that never stop mutating still get scanned.
 let timer = null;
-const scheduleScan = () => {
+let firstPending = 0;
+function scheduleScan() {
+  const now = Date.now();
+  if (!timer) firstPending = now;
   clearTimeout(timer);
-  timer = setTimeout(scan, 600);
-};
+  const wait = Math.max(0, Math.min(600, firstPending + 2000 - now));
+  timer = setTimeout(() => {
+    timer = null;
+    scan();
+  }, wait);
+}
 
-new MutationObserver((mutations) => {
-  // Ignore our own overlay updates.
-  if (mutations.every((m) => m.target === host || host?.contains(m.target))) return;
-  scheduleScan();
-}).observe(document.body, { childList: true, subtree: true, characterData: true });
+new MutationObserver(scheduleScan).observe(document.body, { childList: true, subtree: true, characterData: true });
+// SPA route changes that don't touch the DOM much.
+window.addEventListener("popstate", scheduleScan);
 
-scan();
+// Turn on logging: chrome.storage.local.set({ nookDebug: true }) from the
+// service-worker console, then reload the page.
+chrome.storage.local.get("nookDebug").then(({ nookDebug }) => {
+  debug = !!nookDebug;
+  scan();
+});

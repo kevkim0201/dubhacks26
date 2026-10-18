@@ -24,5 +24,8 @@
     }
   ],
   "permissions": ["identity", "storage"],
-  "host_permissions": ["http://localhost:8000/*"]
+  "host_permissions": [
+    "https://yvkbtnukbwodzvcuihuu.supabase.co/*",
+    "http://localhost:8000/*"
+  ]
 }

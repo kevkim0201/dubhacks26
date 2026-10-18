@@ -6,14 +6,14 @@ Run it in the Supabase SQL Editor for a new project.
 ## What the tables hold
 
 - `profiles`: one row per Supabase Auth user. `total_xp` is lifetime progression
-  and determines the generated `tier`; `acorn_balance` is the spendable balance.
+  and determines the generated `tier`; `acorn_balance` is spendable and may go
+  down when users buy cosmetics.
 - `checkout_sessions`: cart snapshot plus the conversation assessment and
   suggestion. Conversation transcripts are intentionally not stored.
-- `decisions`: decision history and reward ledger. Skips can remain `pending`
-  until their seven-day `available_at`; the backend should set `locked_at` or
-  `cancelled_at` when resolving a pending decision.
-- `saved_items`: per-item waiting state for purchase detection and the 48-hour
-  bonus eligibility window.
+- `decisions`: one completed action per checkout session, with the stored AI
+  recommendation and the acorn/XP payout breakdown.
+- `saved_items`: saved product details for future wishlist features. Saving an
+  item does not trigger a delayed reward in the current MVP.
 - `cosmetics` and `user_cosmetics`: shop catalog and user unlocks.
 
 ## Security and application writes
@@ -24,22 +24,41 @@ client write policies for reward-bearing data. Perform writes through the
 trusted backend and keep `SUPABASE_SERVICE_ROLE_KEY` out of the extension and
 browser.
 
-The next backend milestone is an atomic decision/reward operation that validates
-the session owner, applies the daily cap and streak rules, writes the decision,
-and updates profile XP and balance in one transaction.
+The database function `record_checkout_decision` validates the session owner,
+prevents repeat awards, applies the daily cap, writes the decision, and updates
+profile XP and acorn balance in one transaction. Only the backend `service_role`
+can execute it.
 
-## Reward-rule baseline from the design document
+## MVP recommendation-based reward matrix
 
-- Buy: 20 acorns; reset the non-buy streak.
-- Save: 30 acorns; an item bought after at least 48 hours earns an additional
-  20 acorns.
-- Skip: `min(150, 40 + floor(cart_total / 2))` acorns, pending for seven days.
-- Three consecutive non-buy decisions: +25 acorns.
-- Daily reward cap: 300 acorns.
-- Tier thresholds use lifetime XP: Scout 250, Forager 1,000, Hoarder 3,000,
-  Golden 7,500.
+- Buy + AI recommends Buy: 15 acorns and 15 XP.
+- Buy + AI recommends Save or Don't Buy: 0 acorns and 0 XP.
+- Save for Later: 10 acorns and 10 XP, regardless of the AI recommendation.
+- Don't Buy + AI recommends Don't Buy: 30 acorns and 30 XP.
+- Don't Buy + AI recommends Buy or Save: 5 engagement acorns and 5 XP.
+- No streak bonus, escrow, or delayed purchase bonus.
+- The UTC calendar-day cap is 200 acorns. XP stops when the cap stops acorns;
+  if fewer acorns remain than a payout, both acorns and XP are limited to the
+  remaining amount.
+- Spending acorns does not reduce lifetime XP. XP drives tiers at Scout 250,
+  Forager 1,000, Hoarder 3,000, and Golden 7,500.
 
-Resolve pending skips by matching stable `saved_items.item_key` values against
-subsequent purchases. The API should validate incoming carts and ensure the
-session and user IDs match; database constraints alone do not establish that
-relationship.
+The extension starts a checkout through `POST /api/checkout/start`, and submits
+the user's button action to `POST /api/checkout/{session_id}/decision`.
+The trusted voice/AI service stores the assessment and recommendation through
+the internal `POST /api/checkout/{session_id}/assessment` endpoint using
+`INTERNAL_SERVICE_TOKEN`; do not expose this token to the extension. `wait` from
+the AI is stored as the `save` action. The reward function uses this stored
+recommendation, never a recommendation included in the user's decision request.
+`GET /api/user/state` returns the authenticated user's profile and latest
+decisions.
+
+## Existing Supabase project
+
+If you already ran the previous version of `schema.sql`, run
+`migrations/20261017_recommendation_rewards.sql` in the Supabase SQL Editor
+instead of rerunning the schema. The migration stops if pending or cancelled
+decisions exist, so they can be reviewed rather than silently discarded. It
+preserves their original reward breakdown in `legacy_reward_breakdown` and
+backfills each historical decision's XP award from its previously awarded
+acorns; it does not alter existing profile balances or lifetime XP totals.

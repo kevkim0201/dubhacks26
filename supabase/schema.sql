@@ -7,7 +7,6 @@ create table public.profiles (
   username text not null default 'Pip',
   total_xp bigint not null default 0 check (total_xp >= 0),
   acorn_balance bigint not null default 0 check (acorn_balance >= 0),
-  current_streak integer not null default 0 check (current_streak >= 0),
   tier text generated always as (
     case
       when total_xp >= 7500 then 'Golden'
@@ -48,19 +47,19 @@ create table public.decisions (
   currency text not null default 'USD' check (currency ~ '^[A-Z]{3}$'),
   items jsonb not null default '[]'::jsonb check (jsonb_typeof(items) = 'array'),
   decision text not null check (decision in ('buy', 'save', 'skip')),
-  base_acorns integer not null default 0 check (base_acorns >= 0),
-  streak_bonus_acorns integer not null default 0 check (streak_bonus_acorns >= 0),
-  delayed_bonus_acorns integer not null default 0 check (delayed_bonus_acorns >= 0),
+  recommended_decision text not null check (recommended_decision in ('buy', 'save', 'skip')),
+  recommendation_matched boolean not null,
+  requested_acorns integer not null default 0 check (requested_acorns >= 0),
+  engagement_acorns integer not null default 0 check (engagement_acorns >= 0),
+  decision_bonus_acorns integer not null default 0 check (decision_bonus_acorns >= 0),
   total_acorns integer not null default 0 check (total_acorns >= 0),
-  status text not null check (status in ('pending', 'locked', 'cancelled')),
+  xp_awarded bigint not null default 0 check (xp_awarded >= 0),
+  daily_cap_applied boolean not null default false,
+  legacy_reward_breakdown jsonb,
   reason_summary text,
-  available_at timestamptz,
-  locked_at timestamptz,
-  cancelled_at timestamptz,
   created_at timestamptz not null default now(),
-  check (status <> 'pending' or available_at is not null),
-  check (status <> 'locked' or locked_at is not null),
-  check (status <> 'cancelled' or cancelled_at is not null)
+  check (total_acorns = engagement_acorns + decision_bonus_acorns),
+  check (xp_awarded = total_acorns)
 );
 
 create table public.saved_items (
@@ -75,10 +74,7 @@ create table public.saved_items (
   quantity integer not null default 1 check (quantity > 0),
   status text not null default 'waiting' check (status in ('waiting', 'bought', 'dropped')),
   saved_at timestamptz not null default now(),
-  bonus_eligible_at timestamptz not null,
   purchase_detected_at timestamptz,
-  bonus_awarded_at timestamptz,
-  bonus_acorns integer not null default 20 check (bonus_acorns >= 0),
   created_at timestamptz not null default now(),
   unique (source_decision_id, item_key)
 );
@@ -108,16 +104,191 @@ create index checkout_sessions_user_created_idx
   on public.checkout_sessions (user_id, created_at desc);
 create index decisions_user_created_idx
   on public.decisions (user_id, created_at desc);
-create index decisions_pending_available_idx
-  on public.decisions (available_at)
-  where status = 'pending';
-create index decisions_locked_user_created_idx
-  on public.decisions (user_id, created_at desc)
-  where status = 'locked';
 create index saved_items_user_status_idx
-  on public.saved_items (user_id, status, bonus_eligible_at);
+  on public.saved_items (user_id, status, saved_at desc);
 create index user_cosmetics_user_idx
   on public.user_cosmetics (user_id);
+
+create function public.record_checkout_decision(
+  p_user_id uuid,
+  p_session_id uuid,
+  p_decision text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_session public.checkout_sessions%rowtype;
+  v_old_tier text;
+  v_new_tier text;
+  v_recommended_decision text;
+  v_recommendation_matched boolean;
+  v_requested_engagement integer := 0;
+  v_requested_bonus integer := 0;
+  v_requested_total integer := 0;
+  v_daily_acorns bigint;
+  v_remaining_cap integer;
+  v_engagement_acorns integer := 0;
+  v_decision_bonus_acorns integer := 0;
+  v_total_acorns integer := 0;
+  v_new_total_xp bigint;
+  v_new_acorn_balance bigint;
+  v_tier_up boolean;
+  v_utc_day_start timestamptz :=
+    date_trunc('day', now() at time zone 'UTC') at time zone 'UTC';
+begin
+  if p_decision is null or p_decision not in ('buy', 'save', 'skip') then
+    raise exception 'Decision must be buy, save, or skip'
+      using errcode = '22023';
+  end if;
+
+  select tier
+  into v_old_tier
+  from public.profiles
+  where id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'User profile not found' using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_session
+  from public.checkout_sessions
+  where id = p_session_id
+    and user_id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'Checkout session not found' using errcode = 'P0002';
+  end if;
+
+  if v_session.status <> 'active'
+      or v_session.assessment is null
+      or v_session.suggestion is null then
+    raise exception 'Checkout conversation is not ready for a decision'
+      using errcode = '55000';
+  end if;
+
+  if exists (
+    select 1
+    from public.decisions
+    where session_id = p_session_id
+  ) then
+    raise exception 'A decision has already been recorded for this session'
+      using errcode = '23505';
+  end if;
+
+  v_recommended_decision := case v_session.suggestion
+    when 'wait' then 'save'
+    else v_session.suggestion
+  end;
+  v_recommendation_matched := v_recommended_decision = p_decision;
+
+  if p_decision = 'buy' and v_recommendation_matched then
+    v_requested_engagement := 5;
+    v_requested_bonus := 10;
+  elsif p_decision = 'save' then
+    v_requested_engagement := 5;
+    v_requested_bonus := 5;
+  elsif p_decision = 'skip' then
+    v_requested_engagement := 5;
+    if v_recommendation_matched then
+      v_requested_bonus := 25;
+    end if;
+  end if;
+
+  v_requested_total := v_requested_engagement + v_requested_bonus;
+
+  select coalesce(sum(total_acorns), 0)
+  into v_daily_acorns
+  from public.decisions
+  where user_id = p_user_id
+    and created_at >= v_utc_day_start
+    and created_at < v_utc_day_start + interval '1 day';
+
+  v_remaining_cap := greatest(200 - v_daily_acorns, 0);
+  v_engagement_acorns := least(v_requested_engagement, v_remaining_cap);
+  v_decision_bonus_acorns := least(
+    v_requested_bonus,
+    v_remaining_cap - v_engagement_acorns
+  );
+  v_total_acorns := v_engagement_acorns + v_decision_bonus_acorns;
+
+  update public.profiles
+  set total_xp = total_xp + v_total_acorns,
+      acorn_balance = acorn_balance + v_total_acorns
+  where id = p_user_id
+  returning total_xp, acorn_balance, tier
+  into v_new_total_xp, v_new_acorn_balance, v_new_tier;
+
+  insert into public.decisions (
+    session_id,
+    user_id,
+    store,
+    cart_total,
+    currency,
+    items,
+    decision,
+    recommended_decision,
+    recommendation_matched,
+    requested_acorns,
+    engagement_acorns,
+    decision_bonus_acorns,
+    total_acorns,
+    xp_awarded,
+    daily_cap_applied,
+    reason_summary
+  ) values (
+    p_session_id,
+    p_user_id,
+    v_session.store,
+    v_session.cart_total,
+    v_session.currency,
+    v_session.items,
+    p_decision,
+    v_recommended_decision,
+    v_recommendation_matched,
+    v_requested_total,
+    v_engagement_acorns,
+    v_decision_bonus_acorns,
+    v_total_acorns,
+    v_total_acorns,
+    v_total_acorns < v_requested_total,
+    v_session.reason_summary
+  );
+
+  update public.checkout_sessions
+  set status = 'completed',
+      completed_at = now()
+  where id = p_session_id;
+
+  v_tier_up := v_new_tier <> v_old_tier;
+
+  return jsonb_build_object(
+    'decision', p_decision,
+    'recommended_decision', v_recommended_decision,
+    'recommendation_matched', v_recommendation_matched,
+    'requested_acorns', v_requested_total,
+    'acorns_awarded', v_total_acorns,
+    'xp_awarded', v_total_acorns,
+    'daily_cap_applied', v_total_acorns < v_requested_total,
+    'total_xp', v_new_total_xp,
+    'acorn_balance', v_new_acorn_balance,
+    'tier', v_new_tier,
+    'tier_up', v_tier_up,
+    'daily_acorns_awarded', v_daily_acorns + v_total_acorns,
+    'daily_acorn_cap', 200
+  );
+end;
+$$;
+
+revoke all on function public.record_checkout_decision(uuid, uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.record_checkout_decision(uuid, uuid, text)
+  to service_role;
 
 create function public.set_updated_at()
 returns trigger
