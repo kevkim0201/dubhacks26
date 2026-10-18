@@ -12,7 +12,7 @@
 
 ---
 
-## Executive Summary & Visa Track Fit
+## Executive Summary
 
 ### The Problem: The Cost of Frictionless Payments
 Modern digital commerce has perfected the frictionless transaction. One-click checkouts, saved cards, autofill, and buy-now-pay-later (BNPL) services make spending instantaneous. However, removing checkout friction has created two severe unintended consequences:
