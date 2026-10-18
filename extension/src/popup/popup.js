@@ -35,7 +35,29 @@ const state = {
 voiceEngine.onStateChange = ({ isSpeaking, isListening }) => {
   state.speaking = isSpeaking;
   state.listening = isListening;
-  if (state.screen === "conversation") render();
+  if (state.screen === "conversation") {
+    // Update live status text and waves without losing input focus
+    const waveEl = document.querySelector(".wave");
+    if (waveEl) {
+      waveEl.className = `wave ${state.micOn && (isSpeaking || isListening) ? "" : "paused"}`;
+    }
+    const statusEl = document.getElementById("conv-status-text");
+    if (statusEl) {
+      if (!state.micOn) {
+        statusEl.className = "conversation-status paused";
+        statusEl.textContent = "⏸️ Microphone muted";
+      } else if (isSpeaking) {
+        statusEl.className = "conversation-status speaking";
+        statusEl.textContent = "🔊 Pip is speaking with Eleven Turbo…";
+      } else if (isListening) {
+        statusEl.className = "conversation-status";
+        statusEl.textContent = "🎤 Listening… speak into your microphone";
+      } else {
+        statusEl.className = "conversation-status paused";
+        statusEl.textContent = "Thinking…";
+      }
+    }
+  }
 };
 
 const hasScarf = () => state.progress?.unlocked.includes("scarf");
@@ -121,27 +143,43 @@ const screens = {
       <div class="wave ${state.micOn && (state.speaking || state.listening) ? "" : "paused"}" aria-hidden="true">
         ${Array.from({ length: 11 }, (_, i) => `<span style="animation-delay:${(i % 5) * 0.12}s"></span>`).join("")}
       </div>
-      <h2 class="title-md">${
-        !state.micOn
-          ? "Microphone muted."
-          : state.speaking
-            ? "Pip is speaking…"
-            : state.listening
-              ? "Pip is listening… (Speak now)"
-              : "Thinking…"
-      }</h2>
+      
+      <div id="conv-status-text" class="conversation-status ${state.speaking ? "speaking" : state.listening ? "" : "paused"}">
+        ${
+          !state.micOn
+            ? "⏸️ Microphone muted"
+            : state.speaking
+              ? "🔊 Pip is speaking with Eleven Turbo…"
+              : state.listening
+                ? "🎤 Listening… speak into your microphone"
+                : "Thinking…"
+        }
+      </div>
+
       <p class="quote" id="pip-quote">${escape(state.subtitle || (state.checkout ? "“Why do you need this purchase today?”" : "“What are you thinking of buying?”"))}</p>
-      ${
-        state.userTranscript
-          ? `<p class="muted center-text" style="font-size: 12px; margin-top: 4px; font-style: italic;">You: “${escape(state.userTranscript)}”</p>`
-          : ""
-      }
+      
+      <p id="user-transcript-live" class="muted center-text" style="font-size: 12px; margin-top: 4px; font-style: italic; min-height: 16px;">
+        ${state.userTranscript ? `You: “${escape(state.userTranscript)}”` : ""}
+      </p>
+
       ${
         state.recommendation
-          ? `<div style="margin: 8px auto; text-align: center;"><span class="verdict">${icons.sparkle(12)} Pip suggests: ${escape(state.recommendation)}</span></div>`
+          ? `<div style="margin: 6px auto; text-align: center;"><span class="verdict">${icons.sparkle(12)} Pip suggests: ${escape(state.recommendation)}</span></div>`
           : ""
       }
-      <div class="call-controls">
+
+      <form class="reply-form" id="chat-reply-form">
+        <input type="text" id="chat-reply-text" class="reply-input" placeholder="Or type your reply here…" autocomplete="off" />
+        <button type="submit" class="reply-btn">Send</button>
+      </form>
+
+      <div class="decision-actions">
+        <button class="btn btn-outline" data-action="decide-buy">Buy it</button>
+        <button class="btn btn-outline" data-action="decide-wait">Wait 24h</button>
+        <button class="btn btn-primary" data-action="decide-skip">Skip purchase</button>
+      </div>
+
+      <div class="call-controls" style="padding-top: 4px;">
         <button class="btn-round ${state.micOn ? "" : "off"}" data-action="toggle-mic"
                 aria-label="${state.micOn ? "Mute microphone" : "Unmute microphone"}">${icons.mic(18)}</button>
         <button class="btn btn-primary btn-inline" data-action="end">${icons.stop(14)}<span>End conversation</span></button>
@@ -224,41 +262,58 @@ async function enterApp(session, intent) {
   else go(intent === "companion" ? "companion" : "talk");
 }
 
+async function handleUserTurn(transcript) {
+  state.userTranscript = transcript;
+  const tEl = document.getElementById("user-transcript-live");
+  if (tEl) tEl.textContent = `You: “${transcript}”`;
+
+  try {
+    const rawTotal = String(state.checkout?.total ?? "0").replace(/[^0-9.]/g, "");
+    const turnRes = await apiFetch("/api/checkout/turn", {
+      method: "POST",
+      body: JSON.stringify({
+        user_text: transcript,
+        cart_total: parseFloat(rawTotal || "0"),
+        turn_count: (state.turnCount || 0) + 1,
+      }),
+    });
+
+    state.turnCount = (state.turnCount || 0) + 1;
+    if (turnRes?.reply_text) {
+      state.subtitle = turnRes.reply_text;
+      const qEl = document.getElementById("pip-quote");
+      if (qEl) qEl.textContent = turnRes.reply_text;
+    }
+    if (turnRes?.recommendation) {
+      state.recommendation = turnRes.recommendation;
+    }
+    render();
+
+    if (turnRes?.reply_audio_url) {
+      await voiceEngine.playAudio(`${API_BASE_URL}${turnRes.reply_audio_url}`);
+    }
+
+    if (!turnRes?.done && state.micOn && state.screen === "conversation") {
+      listenForUser();
+    }
+  } catch (err) {
+    console.warn("Turn error:", err);
+  }
+}
+
 function listenForUser() {
   if (!state.micOn || state.screen !== "conversation") return;
   voiceEngine.startListening({
-    onResult: async (transcript) => {
-      state.userTranscript = transcript;
-      render();
-      try {
-        const rawTotal = String(state.checkout?.total ?? "0").replace(/[^0-9.]/g, "");
-        const turnRes = await apiFetch("/api/checkout/turn", {
-          method: "POST",
-          body: JSON.stringify({
-            user_text: transcript,
-            cart_total: parseFloat(rawTotal || "0"),
-            turn_count: (state.turnCount || 0) + 1,
-          }),
-        });
-
-        state.turnCount = (state.turnCount || 0) + 1;
-        if (turnRes?.reply_text) state.subtitle = turnRes.reply_text;
-        if (turnRes?.recommendation) state.recommendation = turnRes.recommendation;
-        render();
-
-        if (turnRes?.reply_audio_url) {
-          await voiceEngine.playAudio(`${API_BASE_URL}${turnRes.reply_audio_url}`);
-        }
-
-        if (!turnRes?.done && state.micOn && state.screen === "conversation") {
-          listenForUser();
-        }
-      } catch (err) {
-        console.warn("Turn error:", err);
-      }
+    onInterim: (interimText) => {
+      state.userTranscript = interimText;
+      const tEl = document.getElementById("user-transcript-live");
+      if (tEl) tEl.textContent = `You: “${interimText}”`;
+    },
+    onResult: (finalText) => {
+      handleUserTurn(finalText);
     },
     onError: (err) => {
-      console.warn("Speech recognition error:", err);
+      console.warn("Speech recognition warning:", err);
     },
   });
 }
@@ -314,19 +369,20 @@ async function startConversation() {
   }
 }
 
-async function endConversation() {
+async function endConversation(decision = "buy") {
   clearInterval(state.timer);
   voiceEngine.stopAll();
 
-  if (state.checkoutSessionId) {
+  if (state.checkoutSessionId && state.checkoutSessionId !== "demo-session") {
     try {
-      await submitCheckoutDecision(state.checkoutSessionId, "buy");
+      await submitCheckoutDecision(state.checkoutSessionId, decision);
     } catch (e) {
       console.warn("Could not submit decision:", e);
     }
   }
 
-  state.result = await applyConversation(state.session.user.id, elapsedSeconds());
+  const userId = state.session?.user?.id ?? "demo_user";
+  state.result = await applyConversation(userId, elapsedSeconds());
   state.progress = state.result.progress;
   go("rewards");
 }
@@ -347,7 +403,10 @@ const actions = {
     }
   },
   start: startConversation,
-  end: endConversation,
+  end: () => endConversation("buy"),
+  "decide-buy": () => endConversation("buy"),
+  "decide-wait": () => endConversation("save"),
+  "decide-skip": () => endConversation("skip"),
   "toggle-mic"() {
     state.micOn = !state.micOn;
     if (!state.micOn) {
@@ -380,14 +439,28 @@ app.addEventListener("click", (e) => {
   });
 });
 
+app.addEventListener("submit", (e) => {
+  if (e.target.id === "chat-reply-form") {
+    e.preventDefault();
+    const input = document.getElementById("chat-reply-text");
+    const text = input?.value?.trim();
+    if (text) {
+      input.value = "";
+      handleUserTurn(text);
+    }
+  }
+});
+
 // ---------- startup: check auth status first ----------
 
 render();
 Promise.all([checkAuth(), takePopupIntent().catch(() => null)])
-  .then(([session, intent]) => (session ? enterApp(session, intent) : go("welcome")))
+  .then(([session, intent]) => {
+    // If not signed in with Supabase yet, allow guest/demo session so the user can immediately test!
+    const effectiveSession = session ?? { user: { id: "demo_user", email: "demo@example.com" } };
+    enterApp(effectiveSession, intent);
+  })
   .catch((err) => {
-    console.error(err);
-    go("welcome");
-    state.error = err?.message ?? "Couldn't check your session. Please sign in.";
-    render();
+    console.warn("Auth check fallback to guest:", err);
+    enterApp({ user: { id: "demo_user", email: "demo@example.com" } }, null);
   });
