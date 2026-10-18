@@ -12,6 +12,13 @@ export async function clearCheckout(tabId) {
   await chrome.storage.session.remove(cartKey(tabId));
 }
 
+export { cartKey };
+
+export async function getActiveTabId() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab?.id ?? null;
+}
+
 export async function getActiveTabCheckout() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return null;

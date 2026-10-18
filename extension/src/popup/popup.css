@@ -437,3 +437,54 @@ body {
   font-size: 10px;
   font-weight: 800;
 }
+
+/* ---------- deal hunt ---------- */
+
+.deal-prompt {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--green-card);
+}
+
+.deal-prompt strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.deal-prompt > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.deal-prompt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.deal-prompt-actions .btn {
+  margin-top: 6px;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.deal-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px !important;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--gold-soft);
+  color: var(--gold-text);
+  font-size: 12px;
+}
+
+.deal-list {
+  margin-top: 4px;
+}

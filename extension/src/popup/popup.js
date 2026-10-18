@@ -1,10 +1,11 @@
 import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
-import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
+import { cartKey, getActiveTabCheckout, getActiveTabId, takePopupIntent } from "../lib/checkout.js";
 import { startCheckoutSession, submitCheckoutDecision } from "../lib/checkout-api.js";
 import { loadCosmeticsState } from "../lib/cosmetics-api.js";
 import { progressFromProfile } from "../lib/progress.js";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
-import { acornChip, cartCard, escape, logo, navBar, pageMenu, progressCard } from "../ui/components.js";
+import { acornChip, cartCard, dealCard, escape, logo, navBar, pageMenu, progressCard } from "../ui/components.js";
+import { runDealCheck, scheduleDealChecks } from "../lib/deal-checks-api.js";
 import { API_BASE_URL } from "../lib/config.js";
 import { apiFetch } from "../lib/api.js";
 import { voiceEngine } from "../lib/voice.js";
@@ -40,6 +41,10 @@ const state = {
   grantMicStatus: null,
   activeVoiceSession: null,
   pipMood: "thinking", // live pose while talking; kept here so re-renders keep it
+  lastSessionId: null, // the session just decided, for "find a better deal"
+  dealPromptDismissed: false,
+  dealChecks: [], // deal_checks rows on the "deals" screen
+  dealLive: {}, // check id -> latest step message while Pip hunts
   stopPipMotion: null,
 };
 
@@ -268,11 +273,44 @@ const screens = {
       </div>` : ""}
       <p class="fine">${award.acorn_balance} acorns · ${award.total_xp} XP total · ${escape(award.tier)} tier</p>
       ${
+        decision === "buy" && state.lastSessionId && !state.dealPromptDismissed
+          ? `<div class="deal-prompt">
+              <strong>${icons.bag(15)} Want Pip to look for a better deal before you pay?</strong>
+              <span>He'll compare prices across stores. Takes about a minute.</span>
+              <div class="deal-prompt-actions">
+                <button class="btn btn-primary" data-action="find-deals">Find deals</button>
+                <button class="btn btn-outline" data-action="skip-deals">No thanks</button>
+              </div>
+            </div>`
+          : ""
+      }
+      ${
+        decision === "save" && award.deal_checks_scheduled > 0
+          ? `<p class="deal-note">${icons.clock(13)} Pip will check prices again in 24 hours. See what he finds on <strong>Your impact</strong>.</p>`
+          : ""
+      }
+      ${
         decision !== "buy" && state.checkout?.tabId
           ? `<button class="btn btn-primary" data-action="close-checkout">${icons.close(16)}<span>Close this checkout</span></button>
              <button class="btn btn-outline" data-action="continue">${icons.arrow(16)}<span>Keep it open</span></button>`
           : `<button class="btn btn-primary" data-action="continue">${icons.arrow(16)}<span>Continue</span></button>`
       }
+    </main>`;
+  },
+
+  deals: () => {
+    const done = state.dealChecks.filter((c) => c.result).length;
+    const total = state.dealChecks.length;
+    return `
+    ${header()}
+    <main class="screen">
+      <h1 class="title">Pip's deal hunt</h1>
+      <p class="muted sub">${
+        total === 0 ? "Getting your cart ready…" : done < total ? `Checking ${total} item${total > 1 ? "s" : ""} across stores…` : "Here's what Pip found."
+      }</p>
+      <div class="art art-xs">${squirrel({ sparkles: done === total && total > 0 })}</div>
+      <div class="deal-list">${state.dealChecks.map((c) => dealCard(c, { live: state.dealLive[c.id] })).join("")}</div>
+      <button class="btn btn-primary" data-action="continue" ${done < total ? "disabled" : ""}>${icons.arrow(16)}<span>${done < total ? "Hunting…" : "Done"}</span></button>
     </main>`;
   },
 
@@ -330,10 +368,27 @@ function go(screen) {
   render();
 }
 
+// The content script keeps updating the cart as the store's page fills in (it starts as a
+// "loading" skeleton). Mirror those updates while the popup is open.
+let watchingCart = false;
+async function watchActiveCart() {
+  if (watchingCart) return;
+  watchingCart = true;
+  const tabId = await getActiveTabId().catch(() => null);
+  if (!tabId) return;
+  chrome.storage.session.onChanged?.addListener((changes) => {
+    const change = changes[cartKey(tabId)];
+    if (!change) return;
+    state.checkout = change.newValue ? { ...change.newValue, tabId } : null;
+    if (state.screen === "talk") render();
+  });
+}
+
 // ---------- actions ----------
 
 async function enterApp(session, intent) {
   state.session = session;
+  watchActiveCart();
   [state.checkout, state.cosmetics] = await Promise.all([
     getActiveTabCheckout().catch(() => null),
     loadCosmeticsState(),
@@ -653,6 +708,8 @@ async function endConversation(decision = "buy") {
     return;
   }
 
+  state.lastSessionId = state.checkoutSessionId;
+  state.dealPromptDismissed = false;
   state.checkoutSessionId = null;
   state.result = { award, decision };
   syncBalances(award);
@@ -724,6 +781,38 @@ const actions = {
     render();
   },
   continue: () => go("companion"),
+  "skip-deals"() {
+    state.dealPromptDismissed = true;
+    render();
+  },
+  // Buy: Pip compares prices for the cart's items right now, narrating as he goes.
+  async "find-deals"() {
+    state.dealChecks = [];
+    state.dealLive = {};
+    go("deals");
+    try {
+      state.dealChecks = await scheduleDealChecks(state.lastSessionId, "buy");
+    } catch (err) {
+      state.error = `Pip couldn't start the deal hunt: ${err?.message ?? err}`;
+      return go("rewards");
+    }
+    render();
+    for (const check of state.dealChecks) {
+      if (check.result) continue;
+      try {
+        const result = await runDealCheck(check.id, (message) => {
+          state.dealLive[check.id] = message;
+          const card = document.querySelector(`.deal-card[data-check="${CSS.escape(check.id)}"] .deal-live span:last-child`);
+          if (card) card.textContent = message; // update in place; no full re-render per step
+        });
+        Object.assign(check, { result, status: "done" });
+      } catch (err) {
+        Object.assign(check, { status: "failed" });
+        state.dealLive[check.id] = err?.message ?? "Pip couldn't finish this one.";
+      }
+      if (state.screen === "deals") render();
+    }
+  },
   // Skip / wait: close the store tab on the user's say-so (never automatically).
   async "close-checkout"() {
     const tabId = state.checkout?.tabId;

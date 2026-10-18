@@ -849,3 +849,46 @@ td.purchase-cell {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- deal checks ("Your wait is over") ---------- */
+
+.deal-checks {
+  margin-bottom: 20px;
+}
+
+.deal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.deal-grid .deal-card + .deal-card {
+  margin-top: 0;
+}
+
+.deal-cell {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.seen-btn {
+  justify-self: end;
+  margin: 0;
+  font-size: 11px;
+}
+
+.deal-sub {
+  margin-top: 16px !important;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.deal-card.is-waiting {
+  border-style: dashed;
+  background: transparent;
+}

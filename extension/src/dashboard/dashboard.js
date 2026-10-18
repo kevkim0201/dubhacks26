@@ -1,10 +1,11 @@
 import { apiFetch } from "../lib/api.js";
+import { listDealChecks, markDealCheckSeen, runDealCheck } from "../lib/deal-checks-api.js";
 import { checkAuth, signInWithGoogle } from "../lib/auth.js";
 import { setPopupIntent } from "../lib/checkout.js";
 import { loadCosmeticsState } from "../lib/cosmetics-api.js";
 import { levelInfo, progressFromProfile } from "../lib/progress.js";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
-import { acornChip, escape } from "../ui/components.js";
+import { acornChip, dealCard, escape } from "../ui/components.js";
 import { decisionsChart, savingsChart } from "./charts.js";
 import { sampleImpact } from "./sample.js";
 
@@ -21,6 +22,9 @@ const state = {
   page: 1,
   loading: true,
   toast: null,
+  dealChecks: [], // wait / buy deal checks (Pip re-checking prices)
+  dealLive: {},
+  dealsRunning: false,
 };
 
 const PAGE_SIZE = 6;
@@ -81,6 +85,35 @@ async function load() {
   }
   state.loading = false;
   render();
+  loadDealChecks();
+}
+
+// Waits that are over get their price check now (fresh prices), one item at a time.
+async function loadDealChecks() {
+  try {
+    state.dealChecks = await listDealChecks();
+  } catch (err) {
+    console.warn("Deal checks unavailable:", err);
+    state.dealChecks = [];
+  }
+  render();
+  if (state.dealsRunning) return;
+  state.dealsRunning = true;
+  for (const check of state.dealChecks.filter((c) => c.trigger === "wait" && c.due && !c.result && !c.seen_at)) {
+    try {
+      const result = await runDealCheck(check.id, (message) => {
+        state.dealLive[check.id] = message;
+        const el = document.querySelector(`.deal-card[data-check="${CSS.escape(check.id)}"] .deal-live span:last-child`);
+        if (el) el.textContent = message;
+      });
+      Object.assign(check, { result, status: "done" });
+    } catch (err) {
+      Object.assign(check, { status: "failed" });
+      state.dealLive[check.id] = err?.message ?? "Pip couldn't finish this one.";
+    }
+    render();
+  }
+  state.dealsRunning = false;
 }
 
 // ---------- sections ----------
@@ -128,6 +161,34 @@ function hero() {
         </label>
         <span class="muted range-dates">${shortDate(range.start)} – ${shortDate(range.end)}, ${end.getUTCFullYear()}</span>
       </div>
+    </section>`;
+}
+
+function dealChecksSection() {
+  const waits = state.dealChecks.filter((c) => c.trigger === "wait" && !c.seen_at);
+  const over = waits.filter((c) => c.due);
+  const upcoming = waits.filter((c) => !c.due);
+  const recentBuys = state.dealChecks.filter((c) => c.trigger === "buy" && c.result && !c.seen_at).slice(0, 3);
+  if (!over.length && !upcoming.length && !recentBuys.length) return "";
+  const withSeen = (c) =>
+    `<div class="deal-cell">${dealCard(c, { live: state.dealLive[c.id] })}${
+      c.result ? `<button class="link-btn seen-btn" data-action="deal-seen" data-id="${escape(c.id)}">Got it</button>` : ""
+    }</div>`;
+  return `
+    <section class="card deal-checks">
+      <div class="card-head">
+        <div>
+          <h2>${over.length ? "Your wait is over" : "Pip's deal checks"}</h2>
+          <p class="muted">${
+            over.length
+              ? "You waited a day. Here's what those items cost now."
+              : "Pip re-checks prices 24 hours after you choose to wait."
+          }</p>
+        </div>
+      </div>
+      ${over.length ? `<div class="deal-grid">${over.map(withSeen).join("")}</div>` : ""}
+      ${recentBuys.length ? `<p class="deal-sub">From your recent buys</p><div class="deal-grid">${recentBuys.map(withSeen).join("")}</div>` : ""}
+      ${upcoming.length ? `<p class="deal-sub">Coming up</p><div class="deal-grid">${upcoming.map((c) => dealCard(c)).join("")}</div>` : ""}
     </section>`;
 }
 
@@ -317,6 +378,7 @@ function render() {
     <main class="dash ${state.loading ? "is-loading" : ""}">
       ${hero()}
       ${banner()}
+      ${dealChecksSection()}
       ${kpis(money)}
       <div class="dash-grid">
         <div class="col">${trends(money)}${decisionsTable()}</div>
@@ -362,6 +424,14 @@ async function openPopup(screen) {
 }
 
 const actions = {
+  async "deal-seen"(button) {
+    const id = button?.dataset.id;
+    if (!id) return;
+    const check = state.dealChecks.find((c) => c.id === id);
+    if (check) check.seen_at = new Date().toISOString();
+    render();
+    markDealCheckSeen(id).catch((e) => console.warn("Could not mark deal check seen:", e));
+  },
   "open-avatar": () => window.location.assign(chrome.runtime.getURL("avatar/index.html")),
   "open-quests": () => chrome.tabs.create({ url: chrome.runtime.getURL("quests/index.html") }),
   async google() {
@@ -386,8 +456,8 @@ const actions = {
 };
 
 app.addEventListener("click", (e) => {
-  const action = e.target.closest("[data-action]")?.dataset.action;
-  actions[action]?.();
+  const button = e.target.closest("[data-action]");
+  actions[button?.dataset.action]?.(button);
 });
 
 app.addEventListener("change", (e) => {

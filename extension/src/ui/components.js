@@ -52,7 +52,21 @@ function thumb(item) {
 
 // The cart Pip spotted. `variant: "popup"` puts the total in the header row;
 // `"overlay"` puts it under the item name.
+// Shimmering placeholder while the store's page is still filling in the order summary.
+function cartSkeleton(checkout) {
+  return `
+    <div class="cart cart-loading" aria-busy="true" aria-label="Reading your cart">
+      <div class="cart-head"><span>${checkout.store ? `<strong>${escape(checkout.store)}</strong> · ` : ""}Pip is reading your cart…</span>
+        <span class="sk sk-price"></span></div>
+      <div class="cart-item">
+        <span class="thumb sk"></span>
+        <div class="sk-lines"><span class="sk sk-line"></span><span class="sk sk-line short"></span></div>
+      </div>
+    </div>`;
+}
+
 export function cartCard(checkout, { variant = "popup" } = {}) {
+  if (checkout.loading) return cartSkeleton(checkout);
   const item = checkout.items?.[0];
   const name = item?.name ?? "Items in your cart";
   const more = checkout.itemCount > 1 ? ` + ${checkout.itemCount - 1} more` : "";
@@ -121,4 +135,72 @@ export function pageMenu(open, { signOut = true } = {}) {
           : ""
       }
     </div>`;
+}
+
+// ---------- deal checks ----------
+
+const money = (value, currency = "USD") =>
+  new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value ?? 0);
+
+/**
+ * One item's deal-check result (or progress). `check` is a deal_checks row; `live` is the
+ * latest step message while Pip is still hunting.
+ */
+export function dealCard(check, { live = null, compact = false } = {}) {
+  const r = check.result;
+  const name = escape(check.item_name);
+  const head = `<div class="deal-head"><strong title="${name}">${name}</strong><span>${money(check.item_price, check.currency)}${check.store ? ` · ${escape(check.store)}` : ""}</span></div>`;
+
+  if (!r) {
+    const waiting = check.status === "pending" && !check.due;
+    const text = waiting
+      ? `Pip will check prices ${dueIn(check.due_at)}.`
+      : live ?? (check.status === "failed" ? "Pip couldn't finish this one." : "Pip is checking prices…");
+    return `<div class="deal-card ${waiting ? "is-waiting" : "is-running"}" data-check="${escape(check.id)}">
+      ${head}<p class="deal-live">${waiting ? icons.clock(13) : `<span class="deal-spinner"></span>`}<span>${escape(text)}</span></p></div>`;
+  }
+
+  const best = r.offers?.[0];
+  const badge = { overpriced: "Cheaper elsewhere", fair: "Fair price", great_deal: "Best price" }[r.verdict];
+  return `<div class="deal-card verdict-${r.verdict}" data-check="${escape(check.id)}">
+    ${head}
+    <p class="deal-verdict"><span class="deal-badge">${badge}</span>${escape(r.verdict_reason)}</p>
+    ${
+      best && !compact
+        ? `<a class="deal-offer" href="${escape(best.link)}" target="_blank" rel="noopener noreferrer">
+            <span><strong>${escape(best.seller)}</strong> · ${money(best.total, check.currency)}${best.shipping === 0 ? " · free shipping" : ""}</span>
+            <span class="deal-save">Save ${money(best.savings, check.currency)} ${icons.external(12)}</span>
+          </a>`
+        : ""
+    }
+    ${!compact && r.alternatives?.length ? similarPicks(r.alternatives, check.currency) : ""}
+    ${r.coupons?.length && !compact ? `<p class="deal-coupon">${icons.sparkle(12)} Coupon: <code>${escape(r.coupons[0].code)}</code> ${escape(r.coupons[0].description)}</p>` : ""}
+  </div>`;
+}
+
+// Different products that do the same job for less, with why they fit and what you give up.
+function similarPicks(alternatives, currency) {
+  return `<div class="deal-alts">
+    <p class="deal-alts-title">${icons.sparkle(12)} Similar picks that fit your need</p>
+    ${alternatives
+      .map(
+        (a) => `<a class="deal-alt" href="${escape(a.link)}" target="_blank" rel="noopener noreferrer" title="${escape(a.title)}">
+          ${a.thumbnail ? `<img src="${escape(a.thumbnail)}" alt="" referrerpolicy="no-referrer" />` : ""}
+          <span class="deal-alt-body">
+            <strong>${escape(a.title)}</strong>
+            <span>${escape(a.seller)} · ${money(a.total, currency)} · <b>save ${money(a.savings, currency)}</b></span>
+            ${a.why ? `<span class="deal-alt-why">${escape(a.why)}</span>` : ""}
+            ${a.tradeoff ? `<span class="deal-alt-trade">Trade-off: ${escape(a.tradeoff)}</span>` : ""}
+          </span>
+        </a>`
+      )
+      .join("")}
+  </div>`;
+}
+
+function dueIn(iso) {
+  const hours = Math.max(0, (new Date(iso) - Date.now()) / 36e5);
+  if (hours < 1) return "in under an hour";
+  if (hours < 24) return `in ${Math.round(hours)}h`;
+  return `tomorrow`;
 }

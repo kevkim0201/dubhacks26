@@ -13,6 +13,10 @@ let host = null; // overlay host element (null when hidden)
 let lastSent = null;
 let dismissedUrl = null; // set by "Not now" so DOM changes on this page don't re-open it
 let activeCheckout = null;
+// Stores often render the order summary a moment after the checkout page itself.
+const CART_GRACE_MS = 8000;
+let cartSeen = { url: null, at: 0 };
+let graceTimer = null;
 let activeUserId = null;
 let debug = false;
 
@@ -143,6 +147,14 @@ async function scan() {
   }
 
   const checkout = readCheckout(document, url, result.site);
+  if (cartSeen.url !== location.href) cartSeen = { url: location.href, at: Date.now() };
+  const hasDetails = checkout.items.length > 0 || !!checkout.total;
+  const waited = Date.now() - cartSeen.at;
+  checkout.loading = !hasDetails && waited < CART_GRACE_MS;
+  // Re-check once the grace period ends, so the skeleton becomes the plain fallback even
+  // on pages that stop changing.
+  clearTimeout(graceTimer);
+  if (checkout.loading) graceTimer = setTimeout(scheduleScan, CART_GRACE_MS - waited + 50);
   if (debug) console.debug("[Nook] cart", checkout);
   const key = JSON.stringify(checkout);
   if (key === lastSent) return;
