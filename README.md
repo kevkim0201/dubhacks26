@@ -81,3 +81,8 @@ def list_things(user: AuthUser):
 Then register it in `app/main.py` with `app.include_router(things.router)`.
 If you deploy the backend somewhere other than localhost, add that host to
 `host_permissions` in `extension/public/manifest.json` and `VITE_API_BASE_URL`.
+
+Checkout rewards are documented in `supabase/README.md`. For the backend, copy
+`backend/.env.example` to `backend/.env` and configure `SUPABASE_SERVICE_ROLE_KEY`
+and a strong `INTERNAL_SERVICE_TOKEN` in addition to `SUPABASE_URL`. Keep both
+server-only secrets out of the extension and source control.
