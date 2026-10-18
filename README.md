@@ -1,151 +1,265 @@
-# dubhacks26
+# Nook — Squirrel Savings
 
-```
-extension/   Chrome extension (Manifest V3, Vite, Supabase Auth w/ Google)
-backend/     FastAPI server that verifies Supabase JWTs
-```
+> **"Every loyalty program rewards you for spending more. Ours rewards you for spending well."**  
+> *Built for DubHacks '26 — Reimagine Shopping (Visa Sponsor Track)*
 
-## 1. Supabase setup
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-4285F4?style=flat-square&logo=googlechrome)](https://developer.chrome.com/docs/extensions/)
+[![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-8E75B2?style=flat-square&logo=google)](https://deepmind.google/technologies/gemini/)
+[![ElevenLabs](https://img.shields.io/badge/ElevenLabs-Conversational_AI-black?style=flat-square)](https://elevenlabs.io/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_%2B_Auth-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python)](https://www.python.org/)
 
-1. Create a project at https://supabase.com.
-2. In Google Cloud Console, create an OAuth client with application type **Web application**.
-   In Supabase **Authentication → Sign In / Providers → Google**, enable Google and paste
-   that client's ID and secret. In Google Cloud, add the exact **callback URL shown by
-   Supabase** as an authorized redirect URI. This is the Supabase callback, usually
-   `https://<project-ref>.supabase.co/auth/v1/callback`—it is not the Chrome extension URL.
-   If the Google consent screen is in Testing mode, add each tester's Google account as a
-   test user.
-3. In Supabase **Authentication → URL Configuration → Redirect URLs**, allow the Chrome
-   extension callback `https://<your-extension-id>.chromiumapp.org/`. Get the extension ID
-   after loading the build. The ID must match the extension that is installed.
-4. The extension manifest grants access to the Supabase project host shown in
-   `extension/.env.example`. If you change Supabase projects, update the corresponding
-   `host_permissions` entry in `extension/public/manifest.json`, rebuild, and reload the
-   unpacked extension.
+---
 
-The two OAuth redirect URLs are different on purpose:
+## Executive Summary & Visa Track Fit
 
-- Google Cloud redirects back to Supabase's `/auth/v1/callback`.
-- Supabase redirects back to Chrome's `<extension-id>.chromiumapp.org/` callback.
+### The Problem: The Cost of Frictionless Payments
+Modern digital commerce has perfected the frictionless transaction. One-click checkouts, saved cards, autofill, and buy-now-pay-later (BNPL) services make spending instantaneous. However, removing checkout friction has created two severe unintended consequences:
+1. **Shopper Regret & Financial Vulnerability:** Over **73% of online purchases are impulse buys**, driving escalating credit card debt and buyer's remorse.
+2. **The $800B+ Merchant & Issuer Return Crisis:** High-impulse purchasing fuels massive return volumes, reverse logistics expenses, payment dispute processing, and chargeback overhead for merchants and payment networks.
+3. **Incentive Misalignment in Traditional Loyalty:** Conventional rewards and cashback programs give cardholders 1–2% back only when they spend *more*. No existing payment platform actively incentivizes *spending mindfulness*.
 
-After the first successful Google login, confirm the account appears under Supabase
-**Authentication → Users** and its profile row appears in **Table Editor → profiles**.
-The database schema's Auth trigger creates that profile.
+### The Visa Opportunity: Reimagining Shopping & Payment Authorization
+**Nook** reimagines the role of payments by introducing a thoughtful, conversational pause right before money leaves the account:
+- **Intelligent Pre-Authorization Reflection:** Nook injects **Pip**, an AI squirrel voice companion, at the exact moment of checkout. In a 30-to-45-second natural voice exchange, Pip asks why the shopper needs the item, helping them weigh need vs. impulse.
+- **Cardholder Value & Deal Verification:** When a purchase is genuinely needed, Nook's background **Deal Agent** automatically scours the web (Google Shopping, live coupons, price checks) to verify whether the price is fair, surface cheaper exact matches, or recommend high-confidence alternative picks.
+- **Rewarding Financial Wellness:** By partnering with payment networks like Visa, loyalty shifts from rewarding reckless consumerism to rewarding financial intentionality. Shoppers earn **Acorns** and **XP** for reflecting, waiting, or skipping. Acorns can be spent on in-game cosmetics or pooled into real-world tree planting pledges.
+- **Universal Merchant Compatibility:** Works across all e-commerce sites (Amazon, Shopify, Target, Walmart, Best Buy, Stripe, PayPal) with zero merchant integration required.
 
-## 2. Chrome extension
+---
 
-```bash
-cd extension
-cp .env.example .env   # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
-npm install
-npm run dev            # rebuilds dist/ on change (or `npm run build`)
-```
+## How It Works
 
-Open `chrome://extensions`, turn on Developer mode, **Load unpacked** → `extension/dist`.
-Copy the extension ID and add its callback URL to Supabase (step 1.3).
+```mermaid
+flowchart TD
+    subgraph Browser ["Browser Extension (Manifest V3)"]
+        Store["Online Store / Checkout Page"] -->|"DOM & Heuristic Scanner"| Detect["Checkout Detector (detect.js)"]
+        Detect -->|"Intent Score >= 5"| Overlay["Shadow DOM Overlay (Pip)"]
+        Overlay -->|"User Clicks Talk"| VoiceUI["Live Voice Dialogue Screen"]
+    end
 
-> Keep the unpacked extension in the same folder to keep its ID stable on your machine.
-> Teammates may have different IDs and must allow their own callback URL in Supabase.
+    subgraph VoiceLoop ["Conversational Intelligence"]
+        VoiceUI <-->|"WebSocket Audio Streaming"| ElevenLabs["ElevenLabs Conversational Agent"]
+        ElevenLabs -->|"Spoken Transcript"| GeminiVerdict["Google Gemini (Structured Verdict)"]
+        GeminiVerdict -->|"Need Assessment + Category"| VerdictScreen["Verdict: Buy / Wait / Skip"]
+    end
 
-### Avatar closet
+    subgraph DecisionAndRewards ["Payment Reflection & Economy"]
+        VerdictScreen -->|"User Choice"| Record["FastAPI (/api/checkout/{id}/decision)"]
+        Record -->|"Service-Role RPC"| Supabase["Supabase DB (Profiles & Decisions)"]
+        Supabase -->|"Atomic Rewards"| Acorns["Acorn Balance + Level XP"]
+    end
 
-Open the Nook popup and choose **Avatar**, or choose **Avatar** from the impact dashboard.
-Apply `supabase/migrations/20261018_avatar_cosmetics.sql` in the Supabase SQL Editor
-after the recommendation rewards migration. The closet then loads the signed-in account's
-acorn balance and cosmetics; purchases and equipment are saved to the account and used to
-render Pip in the popup, dashboard, and checkout overlay.
+    subgraph DealHunt ["Value Optimization"]
+        VerdictScreen -->|"Buy or Wait Selected"| DealAgent["Streaming Deal Agent (/api/deals/stream)"]
+        DealAgent -->|"SerpAPI Google Shopping + Coupons"| DealsEngine["Offer Verification & Similar Picks"]
+        DealsEngine -->|"SSE Stream"| DealsUI["Deal Hunt Cards in Extension"]
+    end
 
-To add floating pet companions to the closet, apply
-`supabase/migrations/20261018_pet_cosmetics.sql` after the avatar cosmetics migration.
-To let users remove equipped items without losing ownership, apply
-`supabase/migrations/20261018_cosmetic_unequip.sql` and restart the backend.
-
-### Trying the checkout flow
-
-```bash
-cd extension && npm run demo   # serves a fake store at http://localhost:4321/checkout.html
+    Acorns --> Closet["Avatar Closet & Pet Cosmetics"]
+    Acorns --> Forest["Community Forest & Tree Planting"]
+    Acorns --> Impact["Impact Analytics Dashboard"]
 ```
 
-Open that page with the extension loaded and Pip's overlay appears in the corner.
+---
 
-How detection works (`src/content/`):
+## Key Features
 
-- `sites.js` – known stores/platforms (Amazon, Shopify, Walmart, Target, Best Buy, eBay,
-  Etsy, Stripe, PayPal, WooCommerce, Magento, BigCommerce) count as a checkout outright.
-- `detect.js` – everything else is scored: checkout URL, card fields or card iframes,
-  place-order buttons, checkout headings, address fields and an order total each add
-  points; article pages lose points. 5+ points = checkout.
-- "Not now" hides the overlay for the current page only; reloading the page or moving to
-  the next checkout step shows Pip again.
-- `npm test` runs fixture tests (`detect.test.js`). Add a fixture when a real site misfires.
+### 1. Zero-Friction Checkout Interception
+- **Universal Heuristic Detection:** Evaluates page paths, credit card inputs, Stripe/PayPal checkout buttons, and cart totals across major retailers without needing site-specific scrapers.
+- **Shadow DOM Isolation:** Renders Pip's friendly companion interface safely into any store page without styling conflicts.
 
-Debugging on a real site: open the service worker console from `chrome://extensions` and run
-`chrome.storage.local.set({ nookDebug: true })`, reload the store page, and its console will
-log `[Nook] score …` with the reasons and the cart Pip read.
+### 2. Conversational Voice Reflection (Pip the Squirrel)
+- **Real-Time Voice Streaming:** Powered by **ElevenLabs Conversational AI** and **Eleven Turbo TTS** for ultra-low latency audio turn-taking.
+- **Structured Rationale Assessment:** Powered by **Google Gemini**, evaluating whether the shopper's intent is a `clear_need`, `unsure`, or `impulsive`, and categorizing the item into one of 19 standardized retail classifications.
+- **User Agency Guaranteed:** Pip advises and challenges; the shopper always has the final word with persistent **Buy it**, **Wait 24 hours**, or **Skip** actions.
 
-Code layout:
+### 3. Real-Time Deal Hunter & "Similar Picks"
+- **Automated Price Check:** If the shopper chooses to proceed with a purchase, Pip launches a live background hunt to ensure they are not overpaying.
+- **Exact Matches & Coupon Engine:** Matches identical product identifiers, conditions, and calculates true total cost (price + shipping - verified coupon discounts).
+- **Intelligent Similar Picks:** Uses Gemini with strict verification to suggest comparable, lower-cost items that satisfy the same shopper need (with honest trade-off disclosures).
+- **Server-Sent Events (SSE):** Streams playful hunting steps live to the UI as Pip checks sellers.
 
-- `src/lib/supabase.js` – Supabase client, session stored in `chrome.storage.local`
-- `src/lib/auth.js` – `signInWithGoogle()` via `chrome.identity.launchWebAuthFlow` (PKCE)
-- `src/lib/checkout-api.js` – authenticated checkout session and decision API helpers
-- `src/lib/api.js` – `apiFetch(path)` adds `Authorization: Bearer <access_token>`
-- `src/popup/` – popup screens, `src/background/` – service worker (messages, opens popup)
-- `src/content/` – checkout detection + in-page overlay (built separately as an IIFE)
-- `src/ui/` – shared Pip art, components and theme used by popup and overlay
-- `src/lib/progress.js` – XP / levels / acorns, `src/lib/checkout.js` – per-tab cart storage
+### 4. Intentionality Loyalty & Progression Economy
+- **Dual-Currency Progression:**
+  - **Lifetime XP:** Immutable score determining squirrel evolution tier:  
+    `Baby` (<250 XP) $\rightarrow$ `Scout` (<1,000 XP) $\rightarrow$ `Forager` (<3,000 XP) $\rightarrow$ `Hoarder` (<7,500 XP) $\rightarrow$ `Golden` (7,500+ XP).
+  - **Spendable Acorns:** Earned by pausing, reflecting, waiting, or skipping.
+- **Avatar Closet & Pet Companions:** Personalize Pip with hats, scarves, environments, and floating pet companions unlocked via intentional savings.
+- **Personal Forest & Sustainable Impact:** Users can pledge 100 acorns to plant real trees, climbing the community leaderboard and connecting digital savings to environmental stewardship.
+- **Impact Analytics Dashboard:** Comprehensive financial telemetry tracking total money saved, decision distribution (Avoided vs. Postponed vs. Proceeded), and weekly savings trends.
+- **Personalized Shopper Onboarding:** Interactive interview that tailors Pip's advice to the user's personal financial goals and impulse shopping triggers.
 
-## 3. FastAPI backend
+---
+
+## Tech Stack & Architecture
+
+| Layer | Technologies | Purpose |
+| :--- | :--- | :--- |
+| **Browser Extension** | Chrome Manifest V3, Vite, Vanilla CSS | Lightweight, cross-store content injection and UI popup |
+| **Backend API** | FastAPI, Python 3.11, Uvicorn, Pydantic v2, HTTPX | High-concurrency REST & SSE streaming backend |
+| **Language & Reasoning AI** | Google Gemini 2.5 Flash (`google-genai` SDK) | Intent assessment, structured verdicts, and similar-pick generation |
+| **Voice & Speech AI** | ElevenLabs Conversational AI & Eleven Turbo TTS | Sub-second voice synthesis and real-time audio dialogues |
+| **Database & Identity** | Supabase (PostgreSQL 15), Supabase Auth (PKCE OAuth) | User profile tracking, session audit trail, and RLS policies |
+| **Search & Deal Verification** | SerpAPI (Google Shopping), Custom Coupon Verification | Real-time market offer discovery and mathematical savings validation |
+
+---
+
+## Getting Started
+
+### Prerequisites
+- **Node.js** (v18+) and **npm**
+- **Python** (3.11+)
+- **Google Cloud Console** (OAuth 2.0 Web Client credentials)
+- **Supabase** account (Free tier supported)
+- **Gemini API Key** (Google AI Studio)
+- **ElevenLabs API Key** & Agent ID (Optional for voice streaming; fallback TTS included)
+- **SerpAPI Key** (Optional; set `DEMO_MODE=1` to use canned product fixtures)
+
+---
+
+### Step 1: Supabase Configuration
+
+1. Create a new Supabase project at [supabase.com](https://supabase.com).
+2. In Google Cloud Console, create an OAuth client of type **Web application**.
+3. In Supabase **Authentication → Sign In / Providers → Google**:
+   - Enable Google, paste the Client ID and Secret.
+   - Copy the Supabase callback URL (e.g., `https://<ref>.supabase.co/auth/v1/callback`) and paste it as an **Authorized redirect URI** in Google Cloud.
+4. In Supabase **Authentication → URL Configuration → Redirect URLs**:
+   - Add your Chrome Extension callback URL: `https://<your-extension-id>.chromiumapp.org/`.
+5. Open the **SQL Editor** in Supabase and execute the schema and migration scripts in order:
+   - [`supabase/schema.sql`](file:///c:/Users/rohit/dubhacks26/supabase/schema.sql)
+   - [`supabase/migrations/20261017_recommendation_rewards.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261017_recommendation_rewards.sql)
+   - [`supabase/migrations/20261018_avatar_cosmetics.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_avatar_cosmetics.sql)
+   - [`supabase/migrations/20261018_pet_cosmetics.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_pet_cosmetics.sql)
+   - [`supabase/migrations/20261018_cosmetic_unequip.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_cosmetic_unequip.sql)
+   - [`supabase/migrations/20261018_purchase_category.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_purchase_category.sql)
+   - [`supabase/migrations/20261018_category_values.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_category_values.sql)
+   - [`supabase/migrations/20261018_quests_forest.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_quests_forest.sql)
+   - [`supabase/migrations/20261018_deal_checks.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_deal_checks.sql)
+   - [`supabase/migrations/20261018_onboarding.sql`](file:///c:/Users/rohit/dubhacks26/supabase/migrations/20261018_onboarding.sql)
+
+---
+
+### Step 2: Backend Setup
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate       # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env   # fill in SUPABASE_URL
-uvicorn app.main:app --reload
+
+# Configure environment variables
+cp .env.example .env
 ```
 
-Docs at http://localhost:8000/docs. `GET /health` is public, `GET /api/me` requires a token.
-After Google sign-in, **Talk to Pip** creates an authenticated checkout session through
-`POST /api/checkout/start`. The returned `session_id` is the handoff ID for the voice-agent
-integration; `apiFetch()` supplies the user's bearer token for backend calls.
-The popup currently does not contain a voice implementation; it saves the session so the
-voice work can connect to it. OAuth setup errors are shown on the welcome screen. If sign-in
-still fails, record the exact on-screen error and check that the installed extension ID,
-Google callback URL, Supabase redirect allow list, and Supabase project host permission all
-match.
+Edit `backend/.env`:
+```ini
+SUPABASE_URL=https://<your-project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+SUPABASE_JWT_SECRET=<your-supabase-jwt-secret>
+INTERNAL_SERVICE_TOKEN=<strong-random-token>
 
-### Deal agent
+GEMINI_API_KEY=<your-gemini-api-key>
+GEMINI_MODEL=gemini-2.5-flash
 
-`POST /api/deals` and `/api/deals/stream` answer "is this a good deal?" for a product page
-(Gemini + SerpAPI Google Shopping). Needs `GEMINI_API_KEY` and `SERPAPI_KEY`; set `DEMO_MODE=1`
-for canned results. Try it from the terminal:
+ELEVENLABS_API_KEY=<your-elevenlabs-api-key>
+ELEVENLABS_AGENT_ID=<your-elevenlabs-agent-id>
+
+SERPAPI_KEY=<your-serpapi-key>
+DEMO_MODE=1                     # Set to 1 for offline fixture demo mode
+```
+
+Run the backend server:
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+Interactive OpenAPI documentation will be accessible at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+---
+
+### Step 3: Chrome Extension Setup
 
 ```bash
-cd backend && .venv/bin/python -m scripts.try_product https://www.bestbuy.com/site/123 --title "Sony WH-1000XM5" --price 399.99
+cd extension
+
+# Configure extension environment
+cp .env.example .env
 ```
 
-Design and contract: [DEAL_AGENT_PLAN.md](DEAL_AGENT_PLAN.md).
-
-### Adding a route
-
-Create `app/routers/things.py`:
-
-```python
-from fastapi import APIRouter
-from app.core.auth import AuthUser
-
-router = APIRouter(prefix="/api/things", tags=["things"])
-
-@router.get("")
-def list_things(user: AuthUser):
-    return {"owner": user.id, "things": []}
+Edit `extension/.env`:
+```ini
+VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Then register it in `app/main.py` with `app.include_router(things.router)`.
-If you deploy the backend somewhere other than localhost, add that host to
-`host_permissions` in `extension/public/manifest.json` and `VITE_API_BASE_URL`.
+Install and build:
+```bash
+npm install
+npm run dev                     # Watches and rebuilds extension/dist/ automatically
+```
 
-Checkout rewards are documented in `supabase/README.md`. For the backend, copy
-`backend/.env.example` to `backend/.env` and configure `SUPABASE_SERVICE_ROLE_KEY`
-and a strong `INTERNAL_SERVICE_TOKEN` in addition to `SUPABASE_URL`. Keep both
-server-only secrets out of the extension and source control.
+**Load the extension in Chrome:**
+1. Navigate to `chrome://extensions/`.
+2. Toggle on **Developer mode** in the top right.
+3. Click **Load unpacked** and select the `dubhacks26/extension/dist/` directory.
+4. Copy the extension's generated ID and ensure it is added to your Supabase Redirect URLs list.
+
+---
+
+### Step 4: Trying the End-to-End Demo
+
+Launch the included mock retail store:
+```bash
+cd extension
+npm run demo                    # Serves demo store at http://localhost:4321
+```
+
+1. Navigate to [http://localhost:4321/checkout.html](http://localhost:4321/checkout.html) in Chrome.
+2. Observe Pip's checkout overlay automatically appearing in the lower-right corner.
+3. Click **Talk to Pip** (or open the Nook extension popup).
+4. Experience the voice check-in, test button choices (*Skip*, *Wait 24h*, *Buy*), watch your **Acorn stash grow**, and trigger Pip's **Deal Hunt** to uncover cheaper options across the web.
+
+---
+
+## Testing & Quality Assurance
+
+Run backend unit and integration tests:
+```bash
+cd backend
+pytest -v
+```
+
+Run content script and checkout detection tests:
+```bash
+cd extension
+npm test
+```
+
+Test the Deal Agent on a standalone product URL:
+```bash
+cd backend
+python -m scripts.try_product https://www.bestbuy.com/site/6505727.p --title "Sony WH-1000XM5" --price 399.99
+```
+
+---
+
+## Security & Architectural Principles
+
+- **Zero Client-Side Secrets:** `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, and `SERPAPI_KEY` are strictly maintained in the backend server. The Chrome extension only ever holds public anonymous keys.
+- **Row-Level Security (RLS):** All Supabase tables protect user privacy. Shoppers can only read their own session logs and progress.
+- **Atomic Reward Enforcement:** XP awards and acorn balance deductions are executed through Postgres stored procedures (`record_checkout_decision`, `purchase_cosmetic`, `plant_trees`), preventing race conditions, balance tampering, and replay exploits.
+- **Graceful Network Degradation:** If network connectivity to external search APIs is unavailable, the Deal Agent and Voice Engine fail gracefully to structured local heuristics and cached fixtures without crashing the checkout experience.
+
+---
+
+## Team & Acknowledgments
+
+Built with dedication for **DubHacks '26**.  
+*Special thanks to the Visa team for inspiring us to rethink commerce, payments, and consumer financial well-being.*
