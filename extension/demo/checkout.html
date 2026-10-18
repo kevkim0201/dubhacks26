@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Checkout · Outdoor Store</title>
+    <!-- Fake store for demoing Nook's checkout detection. Nothing is charged. -->
+    <style>
+      :root {
+        --text: #1f2421;
+        --muted: #6b716d;
+        --border: #dfe2df;
+        --soft: #f3f4f2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 14px;
+        color: var(--text);
+        background: #fff;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 48px;
+        border-bottom: 1px solid var(--border);
+      }
+      .brand { font-size: 18px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+      .secure { color: var(--muted); font-size: 12px; }
+      .layout { display: grid; grid-template-columns: 1fr 420px; min-height: calc(100vh - 62px); }
+      .form { padding: 32px 48px; max-width: 640px; }
+      .crumbs { color: var(--muted); font-size: 12px; }
+      h1 { margin: 8px 0 24px; font-size: 26px; }
+      h2 { font-size: 15px; margin: 24px 0 10px; }
+      .row { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+      .row.three { grid-template-columns: 1fr 1fr 1fr; }
+      label { display: block; margin-bottom: 10px; }
+      label span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+      input, select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font: inherit;
+      }
+      .ship {
+        display: flex; justify-content: space-between;
+        padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--soft);
+      }
+      .pay {
+        width: 100%; margin-top: 16px; padding: 14px;
+        border: none; border-radius: 6px; background: #2c2f2d; color: #fff; font: inherit; font-weight: 600;
+        cursor: pointer;
+      }
+      aside { background: var(--soft); padding: 32px; border-left: 1px solid var(--border); }
+      .item { display: flex; gap: 12px; align-items: center; margin: 16px 0 20px; }
+      .item img { width: 56px; height: 56px; border-radius: 8px; background: #fff; border: 1px solid var(--border); }
+      .item small { display: block; color: var(--muted); }
+      .line { display: flex; justify-content: space-between; margin: 8px 0; color: var(--muted); }
+      .total { display: flex; justify-content: space-between; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 16px; font-weight: 600; }
+      .total strong { font-size: 22px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="brand">⛰ Outdoor Store</span>
+      <span class="secure">🔒 Secure checkout</span>
+    </header>
+    <div class="layout">
+      <form class="form" onsubmit="event.preventDefault(); alert('Demo store: no payment is processed.');">
+        <div class="crumbs">Cart › Checkout</div>
+        <h1>Checkout</h1>
+
+        <h2>Contact</h2>
+        <label><span>Email address</span><input type="email" value="maya@example.com" /></label>
+
+        <h2>Delivery</h2>
+        <label><span>Country / Region</span><select><option>United States</option></select></label>
+        <div class="row">
+          <label><span>First name</span><input value="Maya" /></label>
+          <label><span>Last name</span><input value="Reed" /></label>
+        </div>
+        <label><span>Address</span><input value="123 Maple Lane" /></label>
+        <div class="row three">
+          <label><span>City</span><input value="Portland" /></label>
+          <label><span>State</span><input value="Oregon" /></label>
+          <label><span>ZIP code</span><input value="97205" /></label>
+        </div>
+        <div class="ship"><span>Standard shipping · 3–5 business days</span><span>Free</span></div>
+
+        <h2>Payment</h2>
+        <label><span>Card number</span><input autocomplete="cc-number" placeholder="1234 1234 1234 1234" /></label>
+        <div class="row">
+          <label><span>Expiration date</span><input autocomplete="cc-exp" placeholder="MM / YY" /></label>
+          <label><span>Security code</span><input autocomplete="cc-csc" placeholder="CVC" /></label>
+        </div>
+        <button class="pay" type="submit">🔒 Pay $128.00</button>
+      </form>
+
+      <aside>
+        <strong>Order summary</strong>
+        <div class="item">
+          <img
+            alt="Insulated water bottle"
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'%3E%3Crect width='56' height='56' fill='%23efe9df'/%3E%3Crect x='21' y='8' width='14' height='6' rx='2' fill='%23786b5c'/%3E%3Crect x='18' y='14' width='20' height='36' rx='6' fill='%23c9bba7'/%3E%3Crect x='18' y='24' width='20' height='3' fill='%23b3a38d'/%3E%3C/svg%3E"
+          />
+          <div>
+            <div>Insulated water bottle</div>
+            <small>Stainless steel · 750 ml</small>
+            <small>Qty 1 · $128.00</small>
+          </div>
+        </div>
+        <div class="line"><span>Subtotal</span><span>$128.00</span></div>
+        <div class="line"><span>Shipping</span><span>Free</span></div>
+        <div class="line"><span>Estimated taxes</span><span>$0.00</span></div>
+        <div class="total"><span>Total</span><strong>$128.00</strong></div>
+      </aside>
+    </div>
+  </body>
+</html>

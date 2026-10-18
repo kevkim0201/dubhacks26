@@ -9,7 +9,7 @@ export default defineConfig({
   envDir: __dirname,
   build: {
     outDir: resolve(__dirname, "dist"),
-    emptyOutDir: true,
+    emptyOutDir: false, // shared with the content-script build; `npm run build` cleans first
     rollupOptions: {
       input: {
         popup: resolve(__dirname, "src/popup/index.html"),
