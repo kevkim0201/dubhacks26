@@ -1,0 +1,45 @@
+body {
+  width: 300px;
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+main {
+  padding: 16px;
+}
+h1 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  border: none;
+  border-radius: 6px;
+  background: #4f46e5;
+  color: white;
+  cursor: pointer;
+}
+button.secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #f3f4f6;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+pre:empty {
+  display: none;
+}
+.error {
+  color: #b91c1c;
+}
