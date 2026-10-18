@@ -259,6 +259,7 @@ const actions = {
   done: () => window.close(),
   "go-talk": () => go("talk"),
   "go-companion": () => go("companion"),
+  "go-impact": () => chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/index.html") }),
   async "sign-out"() {
     await signOut();
     state.session = null;

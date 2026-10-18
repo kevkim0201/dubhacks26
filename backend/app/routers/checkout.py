@@ -25,6 +25,7 @@ class CartItem(BaseModel):
     price: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
     quantity: int = Field(default=1, gt=0, le=100)
     url: str | None = Field(default=None, max_length=2048)
+    image: str | None = Field(default=None, max_length=2048)
     item_key: str | None = Field(default=None, max_length=512)
 
 

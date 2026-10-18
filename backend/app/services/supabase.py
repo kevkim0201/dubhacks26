@@ -173,3 +173,37 @@ def get_user_state(user_id: str) -> dict[str, Any]:
         raise SupabaseUnavailable("Supabase returned an invalid decision history")
 
     return {"profile": profiles[0], "recent_decisions": decisions}
+
+
+def list_decisions_since(user_id: str, since_iso: str) -> list[dict[str, Any]]:
+    rows = _request(
+        "GET",
+        "decisions",
+        params={
+            "user_id": f"eq.{user_id}",
+            "created_at": f"gte.{since_iso}",
+            "select": "id,session_id,store,cart_total,currency,items,decision,created_at",
+            "order": "created_at.desc",
+            "limit": "1000",
+        },
+    )
+    if not isinstance(rows, list):
+        raise SupabaseUnavailable("Supabase returned an invalid decision history")
+    return rows
+
+
+def count_conversations_since(user_id: str, since_iso: str) -> int:
+    rows = _request(
+        "GET",
+        "checkout_sessions",
+        params={
+            "user_id": f"eq.{user_id}",
+            "created_at": f"gte.{since_iso}",
+            "assessment": "not.is.null",
+            "select": "id",
+            "limit": "1000",
+        },
+    )
+    if not isinstance(rows, list):
+        raise SupabaseUnavailable("Supabase returned an invalid session list")
+    return len(rows)

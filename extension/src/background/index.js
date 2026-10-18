@@ -35,6 +35,11 @@ const handlers = {
     return { ok: true };
   },
 
+  async OPEN_DASHBOARD() {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/index.html") });
+    return { ok: true };
+  },
+
   // The overlay can't open the popup itself; the worker can (Chrome 127+).
   async OPEN_POPUP(message, sender) {
     await setPopupIntent(message.screen ?? "talk");

@@ -115,6 +115,8 @@ async function showOverlay(checkout) {
       } else if (action === "talk" || action === "go-talk") {
         goQuiet();
         openPopup("conversation");
+      } else if (action === "go-impact") {
+        send({ type: "OPEN_DASHBOARD" });
       } else if (action === "go-companion") {
         openPopup("companion");
       }
