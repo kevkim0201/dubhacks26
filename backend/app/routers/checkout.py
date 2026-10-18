@@ -1,9 +1,11 @@
 import secrets
+import urllib.parse
 from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, status
+import httpx
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.core.auth import AuthUser
@@ -18,6 +20,8 @@ from app.services.supabase import (
 )
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
+
+DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 
 
 class CartItem(BaseModel):
@@ -46,6 +50,101 @@ class DecisionRequest(BaseModel):
     decision: Literal["buy", "save", "skip"]
 
 
+class CheckoutTurnRequest(BaseModel):
+    user_text: str
+    cart_total: float = 0.0
+    turn_count: int = 1
+
+
+@router.get("/voice/speak")
+async def generate_speech(
+    text: str = Query(..., description="Text for Pip to speak"),
+    voice_id: str = Query(DEFAULT_VOICE_ID, description="ElevenLabs voice ID"),
+) -> Response:
+    """Streams ElevenLabs Eleven Turbo synthesized speech audio (MP3)."""
+    settings = get_settings()
+    if not settings.elevenlabs_api_key:
+        raise HTTPException(status_code=503, detail="ElevenLabs API key not configured")
+
+    clean_text = text.strip()
+    if not clean_text:
+        raise HTTPException(status_code=400, detail="Empty text provided")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            tts_url = (
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128"
+            )
+            resp = await client.post(
+                tts_url,
+                headers={"xi-api-key": settings.elevenlabs_api_key},
+                json={
+                    "text": clean_text,
+                    "model_id": "eleven_turbo_v2_5",
+                    "voice_settings": {
+                        "stability": 0.45,
+                        "similarity_boost": 0.8,
+                    },
+                },
+            )
+
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=resp.status_code,
+                    detail=f"ElevenLabs TTS failed: {resp.text}",
+                )
+
+            return Response(
+                content=resp.content,
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                    "Content-Disposition": "inline; filename=pip-voice.mp3",
+                },
+            )
+    except httpx.RequestError as err:
+        raise HTTPException(status_code=502, detail=f"Failed to connect to ElevenLabs: {err}")
+
+
+@router.post("/turn")
+def handle_checkout_turn(payload: CheckoutTurnRequest) -> dict:
+    user_text = payload.user_text.strip().lower()
+    turn_count = payload.turn_count
+
+    if any(k in user_text for k in ["gym", "need", "replace", "broke", "work", "gift", "run", "training"]):
+        reply_text = "Fair enough! If it's replacing something broken or for your daily routine, that's solid. Go for it if you feel ready!"
+        done = True
+        recommendation = "Go for it"
+    elif any(k in user_text for k in ["sale", "deal", "cheap", "want", "bored", "cute", "treat", "impulse"]):
+        if turn_count < 2:
+            reply_text = "A good deal is tempting! But just checking: do you already have something similar, or could you wait 24 hours?"
+            done = False
+            recommendation = "Consider waiting"
+        else:
+            reply_text = f"Got it! Skipping or waiting saves you ${payload.cart_total:.0f} and earns extra acorns, but the final call is yours."
+            done = True
+            recommendation = "Wait 24 hours"
+    else:
+        if turn_count >= 2:
+            reply_text = "Makes sense. Take a moment to weigh it—whatever you choose, you earn acorns for reflecting!"
+            done = True
+            recommendation = "Thoughtful pause"
+        else:
+            reply_text = "Tell me more! How often do you honestly see yourself using it this month?"
+            done = False
+            recommendation = None
+
+    audio_param = urllib.parse.quote(reply_text)
+    reply_audio_url = f"/api/checkout/voice/speak?text={audio_param}"
+
+    return {
+        "reply_text": reply_text,
+        "reply_audio_url": reply_audio_url,
+        "done": done,
+        "recommendation": recommendation,
+    }
+
+
 @router.post("/start", status_code=status.HTTP_201_CREATED)
 def start_checkout(payload: CheckoutStartRequest, user: AuthUser) -> dict:
     try:
@@ -63,7 +162,21 @@ def start_checkout(payload: CheckoutStartRequest, user: AuthUser) -> dict:
     except SupabaseAPIError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not create checkout session") from exc
 
-    return {"session_id": session["id"], "status": session["status"]}
+    if payload.items:
+        first_item = payload.items[0].name
+        opening_line = f"Ooh, ${payload.cart_total:.0f} for {first_item}! Why do you need this today?"
+    else:
+        opening_line = f"Ooh, ${payload.cart_total:.0f} in your cart at {payload.store}! Why do you need this today?"
+
+    audio_param = urllib.parse.quote(opening_line)
+    audio_url = f"/api/checkout/voice/speak?text={audio_param}"
+
+    return {
+        "session_id": session["id"],
+        "status": session["status"],
+        "opening_line": opening_line,
+        "audio_url": audio_url,
+    }
 
 
 @router.post("/{session_id}/assessment", include_in_schema=False)

@@ -1,27 +1,41 @@
 import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
-import { startCheckoutSession } from "../lib/checkout-api.js";
 import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
-import { loadProgress } from "../lib/progress.js";
+import { startCheckoutSession, submitCheckoutDecision } from "../lib/checkout-api.js";
+import { applyConversation, loadProgress } from "../lib/progress.js";
 import { icons, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, escape, logo, navBar, progressCard } from "../ui/components.js";
+import { API_BASE_URL } from "../lib/config.js";
+import { apiFetch } from "../lib/api.js";
+import { voiceEngine } from "../lib/voice.js";
 
 const app = document.getElementById("app");
 
 const state = {
   screen: "loading", // loading | welcome | talk | conversation | rewards | companion
   session: null,
-  checkoutSessionId: null,
   progress: null,
   checkout: null, // cart the content script spotted in the active tab
+  checkoutSessionId: null,
   error: null,
   busy: false,
   // conversation
   startedAt: 0,
   micOn: true,
   timer: null,
+  subtitle: "",
+  userTranscript: "",
+  turnCount: 0,
+  speaking: false,
+  listening: false,
   // set when a conversation ends
   result: null,
   recommendation: null, // e.g. "Wait 24 hours" / "Go for it", from the voice agent
+};
+
+voiceEngine.onStateChange = ({ isSpeaking, isListening }) => {
+  state.speaking = isSpeaking;
+  state.listening = isListening;
+  if (state.screen === "conversation") render();
 };
 
 const hasScarf = () => state.progress?.unlocked.includes("scarf");
@@ -79,7 +93,7 @@ const screens = {
       ${cartCard(state.checkout)}
       <div class="art art-sm">${squirrel({ scarf: hasScarf() })}</div>
       ${progressCard(state.progress)}
-      <button class="btn btn-primary" data-action="start" ${state.busy ? "disabled" : ""}>${icons.mic(16)}<span>${state.busy ? "Connecting…" : "Talk to Pip"}</span></button>
+      <button class="btn btn-primary" data-action="start">${icons.mic(16)}<span>Talk to Pip</span></button>
       <p class="fine">${icons.headphones(12)} Tell Pip why this purchase matters.</p>
     </main>
     ${navBar("talk")}`
@@ -91,7 +105,7 @@ const screens = {
       <div class="empty-cart">${icons.bag(18)}<span>Shopping for something? Talk it through before you head to checkout.</span></div>
       <div class="art art-sm">${squirrel({ scarf: hasScarf() })}</div>
       ${progressCard(state.progress)}
-      <button class="btn btn-primary" data-action="start" ${state.busy ? "disabled" : ""}>${icons.mic(16)}<span>${state.busy ? "Connecting…" : "Talk to Pip"}</span></button>
+      <button class="btn btn-primary" data-action="start">${icons.mic(16)}<span>Talk to Pip</span></button>
       <p class="fine">${icons.headphones(12)} Tell Pip what you're thinking of buying.</p>
     </main>
     ${navBar("talk")}`,
@@ -100,29 +114,39 @@ const screens = {
     ${header()}
     <main class="screen">
       <div class="session-row">
-        <span><span class="dot"></span>Talk to Pip</span>
+        <span><span class="dot"></span>Talk to Pip (Eleven Turbo)</span>
         <span id="timer">${formatTime(elapsedSeconds())}</span>
       </div>
       <div class="art">${squirrel({ scarf: hasScarf() })}</div>
-      <div class="wave ${state.micOn ? "" : "paused"}" aria-hidden="true">
+      <div class="wave ${state.micOn && (state.speaking || state.listening) ? "" : "paused"}" aria-hidden="true">
         ${Array.from({ length: 11 }, (_, i) => `<span style="animation-delay:${(i % 5) * 0.12}s"></span>`).join("")}
       </div>
       <h2 class="title-md">${
-        !state.micOn ? "Paused." : state.checkout ? "Pip is reviewing your cart." : "Pip is listening."
-      }</h2>
-      <p class="quote">${
         !state.micOn
-          ? "Tap the mic when you're ready to keep going."
-          : state.checkout
-            ? "“Why do you need this purchase today?”"
-            : "“What are you thinking of buying?”"
-      }</p>
+          ? "Microphone muted."
+          : state.speaking
+            ? "Pip is speaking…"
+            : state.listening
+              ? "Pip is listening… (Speak now)"
+              : "Thinking…"
+      }</h2>
+      <p class="quote" id="pip-quote">${escape(state.subtitle || (state.checkout ? "“Why do you need this purchase today?”" : "“What are you thinking of buying?”"))}</p>
+      ${
+        state.userTranscript
+          ? `<p class="muted center-text" style="font-size: 12px; margin-top: 4px; font-style: italic;">You: “${escape(state.userTranscript)}”</p>`
+          : ""
+      }
+      ${
+        state.recommendation
+          ? `<div style="margin: 8px auto; text-align: center;"><span class="verdict">${icons.sparkle(12)} Pip suggests: ${escape(state.recommendation)}</span></div>`
+          : ""
+      }
       <div class="call-controls">
         <button class="btn-round ${state.micOn ? "" : "off"}" data-action="toggle-mic"
                 aria-label="${state.micOn ? "Mute microphone" : "Unmute microphone"}">${icons.mic(18)}</button>
         <button class="btn btn-primary btn-inline" data-action="end">${icons.stop(14)}<span>End conversation</span></button>
       </div>
-      <p class="fine">Explain your purchase · Pip may advise waiting or give you a go-ahead.</p>
+      <p class="fine">Powered by ElevenLabs Eleven Turbo · Instant voice reflection</p>
     </main>`,
 
   rewards: () => {
@@ -200,15 +224,69 @@ async function enterApp(session, intent) {
   else go(intent === "companion" ? "companion" : "talk");
 }
 
+function listenForUser() {
+  if (!state.micOn || state.screen !== "conversation") return;
+  voiceEngine.startListening({
+    onResult: async (transcript) => {
+      state.userTranscript = transcript;
+      render();
+      try {
+        const rawTotal = String(state.checkout?.total ?? "0").replace(/[^0-9.]/g, "");
+        const turnRes = await apiFetch("/api/checkout/turn", {
+          method: "POST",
+          body: JSON.stringify({
+            user_text: transcript,
+            cart_total: parseFloat(rawTotal || "0"),
+            turn_count: (state.turnCount || 0) + 1,
+          }),
+        });
+
+        state.turnCount = (state.turnCount || 0) + 1;
+        if (turnRes?.reply_text) state.subtitle = turnRes.reply_text;
+        if (turnRes?.recommendation) state.recommendation = turnRes.recommendation;
+        render();
+
+        if (turnRes?.reply_audio_url) {
+          await voiceEngine.playAudio(`${API_BASE_URL}${turnRes.reply_audio_url}`);
+        }
+
+        if (!turnRes?.done && state.micOn && state.screen === "conversation") {
+          listenForUser();
+        }
+      } catch (err) {
+        console.warn("Turn error:", err);
+      }
+    },
+    onError: (err) => {
+      console.warn("Speech recognition error:", err);
+    },
+  });
+}
+
 async function startConversation() {
   state.busy = true;
   state.error = null;
   render();
 
   try {
-    const session = await startCheckoutSession(state.checkout);
+    let session = null;
+    try {
+      session = await startCheckoutSession(state.checkout);
+    } catch (e) {
+      console.warn("Backend session creation deferred or guest mode:", e);
+      session = {
+        session_id: null,
+        opening_line: state.checkout?.items?.[0]?.name
+          ? `Ooh, ${state.checkout.total ?? ""} for ${state.checkout.items[0].name}! Why do you need this today?`
+          : "“Why do you need this purchase today?”",
+        audio_url: `/api/checkout/voice/speak?text=${encodeURIComponent("Why do you need this purchase today?")}`,
+      };
+    }
 
-    state.checkoutSessionId = session.session_id;
+    state.checkoutSessionId = session?.session_id ?? null;
+    state.subtitle = session?.opening_line || "“Why do you need this purchase today?”";
+    state.userTranscript = "";
+    state.turnCount = 0;
     state.startedAt = Date.now();
     state.micOn = true;
     state.recommendation = null;
@@ -217,7 +295,16 @@ async function startConversation() {
       const el = document.getElementById("timer");
       if (el) el.textContent = formatTime(elapsedSeconds());
     }, 1000);
+
     go("conversation");
+
+    if (session?.audio_url) {
+      await voiceEngine.playAudio(`${API_BASE_URL}${session.audio_url}`);
+    }
+
+    if (state.micOn && state.screen === "conversation") {
+      listenForUser();
+    }
   } catch (err) {
     state.error = err?.message ?? String(err);
     render();
@@ -229,9 +316,19 @@ async function startConversation() {
 
 async function endConversation() {
   clearInterval(state.timer);
-  state.error =
-    "The voice agent is not connected yet. Your checkout session is ready for the voice integration.";
-  render();
+  voiceEngine.stopAll();
+
+  if (state.checkoutSessionId) {
+    try {
+      await submitCheckoutDecision(state.checkoutSessionId, "buy");
+    } catch (e) {
+      console.warn("Could not submit decision:", e);
+    }
+  }
+
+  state.result = await applyConversation(state.session.user.id, elapsedSeconds());
+  state.progress = state.result.progress;
+  go("rewards");
 }
 
 const actions = {
@@ -253,6 +350,11 @@ const actions = {
   end: endConversation,
   "toggle-mic"() {
     state.micOn = !state.micOn;
+    if (!state.micOn) {
+      voiceEngine.stopListening();
+    } else {
+      listenForUser();
+    }
     render();
   },
   continue: () => go("companion"),
@@ -260,6 +362,7 @@ const actions = {
   "go-talk": () => go("talk"),
   "go-companion": () => go("companion"),
   async "sign-out"() {
+    voiceEngine.stopAll();
     await signOut();
     state.session = null;
     state.progress = null;
