@@ -14,16 +14,16 @@ A browser extension and web companion where an AI squirrel intercepts checkout t
 - **Browser Extension:** Chrome Manifest V3, Vite build, Three.js bundled via npm, Shadow DOM for non-intrusive store injection, Supabase Auth.
 - **Backend API:** FastAPI (Python), httpx, Pydantic, Supabase/SQLite persistence.
 - **AI & Audio Engine:** 
-  - **Gemini:** Conversational reflection, intent assessment, witty cart-specific opening lines.
-  - **ElevenLabs:** Real-time speech-to-text / text-to-speech squirrel voice synthesis.
+  - **ElevenLabs Conversational AI Agent (Turbo):** Real-time full-duplex conversational voice agent managing listening, turn-taking, squirrel voice synthesis, and context overrides.
+  - **Backend Agent Dispatch:** Issues signed WebSocket URLs (`/checkout/start`) with dynamic cart context so API keys remain private.
 - **Game & Companion:** Three.js 3D character with 5 evolution tiers (Baby, Scout, Forager, Hoarder, Golden), dynamic instanced acorn stash, tree home, cosmetics shop, and savings history.
 
 ## Team Workstreams
 - **Workstream 1 (Voice & Checkout Interaction — Rohit & William):**
   - Checkout page detection & cart parsing.
-  - Shadow DOM overlay with mic, voice synthesis playback, and decision buttons.
-  - Gemini prompt engineering & conversation loop (<= 3 turns, ~45s).
-  - ElevenLabs integration / fallback audio loop.
+  - Shadow DOM overlay with mic, voice streaming via ElevenLabs Conversational Agent, and decision buttons.
+  - ElevenLabs agent persona prompt, cart variables, and turn-capping.
+  - Backend signed WebSocket URL generator.
 - **Workstream 2 (Rewards, Game & Persistence — Kevin & Deetya):**
   - Mock store & checkout playground.
   - FastAPI backend endpoints for `/checkout/*` and `/user/*`.

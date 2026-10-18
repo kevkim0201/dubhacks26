@@ -8,12 +8,12 @@
 - **REQ-CART-3:** Inject a floating conversational overlay into a clean Shadow DOM to avoid styling conflicts.
 
 ### 2. Conversational Agent & Voice Loop (Workstream 1)
-- **REQ-VOICE-1:** Initiate conversation session with backend `POST /checkout/start` sending cart metadata.
-- **REQ-VOICE-2:** Generate a personalized opening line using Gemini with squirrel persona based on cart items.
-- **REQ-VOICE-3:** Provide squirrel voice audio stream/URL via ElevenLabs text-to-speech.
-- **REQ-VOICE-4:** Support user speech input (browser Web Speech API / mic capture or ElevenLabs conversational agent) with push-to-talk and text fallback.
-- **REQ-VOICE-5:** Cap conversation at 3 turns (~45 seconds) and maintain structured evaluation output from Gemini.
-- **REQ-VOICE-6:** Persistent decision buttons: "Buy it" (+20 acorns), "Save for later" (+30 acorns), "Skip" (+40+ acorns).
+- **REQ-VOICE-1:** Backend `POST /checkout/start` issues a signed ElevenLabs WebSocket URL with dynamic cart variables and squirrel prompt override.
+- **REQ-VOICE-2:** Client connects directly to ElevenLabs Conversational AI Agent (Turbo) for full-duplex conversational voice with sub-second response times.
+- **REQ-VOICE-3:** Squirrel agent initiates speech immediately upon connection with a personalized, cheeky opening question based on cart items.
+- **REQ-VOICE-4:** Agent handles real-time speech listening, turn-taking, and interruptions with squirrel voice persona.
+- **REQ-VOICE-5:** Cap conversation at 3 turns (~45 seconds) and maintain structured evaluation summary.
+- **REQ-VOICE-6:** Persistent decision buttons in overlay: "Buy it" (+20 acorns), "Save for later" (+30 acorns), "Skip" (+40+ acorns).
 
 ### 3. Rewards & Acorns System (Workstream 2)
 - **REQ-REWARD-1:** Award flat 20 acorns for "Buy" after conversation.

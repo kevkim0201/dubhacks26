@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_jwt_secret: str = ""
     cors_origins: str = ""
+    elevenlabs_api_key: str = ""
+    elevenlabs_agent_id: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

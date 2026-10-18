@@ -1,5 +1,7 @@
+import httpx
 from fastapi import APIRouter, HTTPException
 
+from app.core.config import get_settings
 from app.core.storage import db
 from app.schemas.checkout import (
     CheckoutDecisionRequest,
@@ -10,7 +12,23 @@ from app.schemas.checkout import (
     CheckoutTurnResponse,
 )
 
+settings = get_settings()
 router = APIRouter(prefix="/checkout", tags=["checkout"])
+
+
+async def get_elevenlabs_signed_url(agent_id: str, api_key: str) -> str | None:
+    """Obtains a short-lived signed WebSocket URL for ElevenLabs Conversational AI Agent."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id={agent_id}",
+                headers={"xi-api-key": api_key},
+            )
+            if resp.status_code == 200:
+                return resp.json().get("signed_url")
+    except Exception as err:
+        print(f"ElevenLabs signed URL request failed: {err}")
+    return None
 
 
 @router.post("/start", response_model=CheckoutStartResponse)
@@ -29,10 +47,16 @@ async def start_checkout_session(payload: CheckoutStartRequest) -> CheckoutStart
     else:
         opening_line = f"Ooh, ${total:.0f} in your cart! What are you grabbing today?"
 
+    voice_link = None
+    if settings.elevenlabs_api_key and settings.elevenlabs_agent_id:
+        voice_link = await get_elevenlabs_signed_url(
+            settings.elevenlabs_agent_id, settings.elevenlabs_api_key
+        )
+
     return CheckoutStartResponse(
         session_id=session_id,
         opening_line=opening_line,
-        voice_link=None,  # Populated in Phase 3 with ElevenLabs
+        voice_link=voice_link,
     )
 
 
