@@ -23,6 +23,7 @@ class CheckoutStartResponse(BaseModel):
     session_id: str
     opening_line: str
     voice_link: str | None = None
+    audio_url: str | None = None
 
 
 class CheckoutTurnRequest(BaseModel):
@@ -34,6 +35,7 @@ class CheckoutTurnResponse(BaseModel):
     reply_text: str
     reply_audio_url: str | None = None
     done: bool = False
+    recommendation: str | None = None
 
 
 class CheckoutDecisionRequest(BaseModel):

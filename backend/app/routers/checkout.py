@@ -1,5 +1,6 @@
+import urllib.parse
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.core.config import get_settings
 from app.core.storage import db
@@ -14,6 +15,9 @@ from app.schemas.checkout import (
 
 settings = get_settings()
 router = APIRouter(prefix="/checkout", tags=["checkout"])
+
+# Default squirrel voice ID (Rachel - friendly, warm, clear)
+DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 
 
 async def get_elevenlabs_signed_url(agent_id: str, api_key: str) -> str | None:
@@ -31,6 +35,55 @@ async def get_elevenlabs_signed_url(agent_id: str, api_key: str) -> str | None:
     return None
 
 
+@router.get("/voice/speak")
+async def generate_speech(
+    text: str = Query(..., description="Text for Pip the Squirrel to speak"),
+    voice_id: str = Query(DEFAULT_VOICE_ID, description="ElevenLabs voice ID"),
+) -> Response:
+    """Streams ElevenLabs Eleven Turbo synthesized speech audio (MP3)."""
+    if not settings.elevenlabs_api_key:
+        raise HTTPException(status_code=503, detail="ElevenLabs API key not configured")
+
+    clean_text = text.strip()
+    if not clean_text:
+        raise HTTPException(status_code=400, detail="Empty text provided")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            tts_url = (
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128"
+            )
+            resp = await client.post(
+                tts_url,
+                headers={"xi-api-key": settings.elevenlabs_api_key},
+                json={
+                    "text": clean_text,
+                    "model_id": "eleven_turbo_v2_5",
+                    "voice_settings": {
+                        "stability": 0.45,
+                        "similarity_boost": 0.8,
+                    },
+                },
+            )
+
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=resp.status_code,
+                    detail=f"ElevenLabs TTS failed: {resp.text}",
+                )
+
+            return Response(
+                content=resp.content,
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                    "Content-Disposition": "inline; filename=pip-voice.mp3",
+                },
+            )
+    except httpx.RequestError as err:
+        raise HTTPException(status_code=502, detail=f"Failed to connect to ElevenLabs: {err}")
+
+
 @router.post("/start", response_model=CheckoutStartResponse)
 async def start_checkout_session(payload: CheckoutStartRequest) -> CheckoutStartResponse:
     cart_dict = payload.cart.model_dump()
@@ -43,9 +96,9 @@ async def start_checkout_session(payload: CheckoutStartRequest) -> CheckoutStart
 
     if items:
         first_item = items[0]
-        opening_line = f"Ooh, ${total:.0f} {first_item.name}! What are they for?"
+        opening_line = f"Ooh, ${total:.0f} for {first_item.name}! Why do you need this today?"
     else:
-        opening_line = f"Ooh, ${total:.0f} in your cart! What are you grabbing today?"
+        opening_line = f"Ooh, ${total:.0f} in your cart! What are you thinking of grabbing?"
 
     voice_link = None
     if settings.elevenlabs_api_key and settings.elevenlabs_agent_id:
@@ -53,10 +106,15 @@ async def start_checkout_session(payload: CheckoutStartRequest) -> CheckoutStart
             settings.elevenlabs_agent_id, settings.elevenlabs_api_key
         )
 
+    # Audio endpoint for Pip's speech
+    audio_param = urllib.parse.quote(opening_line)
+    audio_url = f"/checkout/voice/speak?text={audio_param}"
+
     return CheckoutStartResponse(
         session_id=session_id,
         opening_line=opening_line,
         voice_link=voice_link,
+        audio_url=audio_url,
     )
 
 
@@ -69,31 +127,43 @@ async def handle_checkout_turn(payload: CheckoutTurnRequest) -> CheckoutTurnResp
     turn_count = len(session.get("turns", [])) + 1
     user_text = payload.user_text.strip().lower()
 
-    # Adaptive dialogue response simulation (until Gemini Phase 3)
-    if "gym" in user_text or "need" in user_text or "replace" in user_text or "broke" in user_text:
-        reply_text = "Fair enough! If it's replacing something broken or needed for your routine, that's solid. Ready to decide?"
+    # Conversational squirrel evaluation
+    cart = session.get("cart", {})
+    cart_total = float(cart.get("total", 0.0))
+
+    if any(k in user_text for k in ["gym", "need", "replace", "broke", "work", "gift", "run", "training"]):
+        reply_text = "Fair enough! If it's replacing something broken or for your daily routine, that's solid. Go for it if you feel ready!"
         done = True
-    elif "sale" in user_text or "deal" in user_text or "cheap" in user_text or "want" in user_text:
-        if turn_count < 3:
-            reply_text = "A good deal is tempting! But just checking: do you already have something similar in your closet or desk?"
+        recommendation = "Go for it"
+    elif any(k in user_text for k in ["sale", "deal", "cheap", "want", "bored", "cute", "treat", "impulse"]):
+        if turn_count < 2:
+            reply_text = "A good deal is tempting! But just checking: do you already have something similar, or could you wait 24 hours?"
             done = False
+            recommendation = "Consider waiting"
         else:
-            reply_text = "Got it! Sleeping on it or skipping earns you extra acorns, but the choice is always yours. What's the call?"
+            reply_text = f"Got it! Skipping or waiting saves you ${cart_total:.0f} and earns extra acorns, but the final call is yours."
             done = True
+            recommendation = "Wait 24 hours"
     else:
         if turn_count >= 2:
             reply_text = "Makes sense. Take a moment to weigh it—whatever you choose, you earn acorns for reflecting!"
             done = True
+            recommendation = "Thoughtful pause"
         else:
-            reply_text = "Tell me more! How often do you think you'll use it this month?"
+            reply_text = "Tell me more! How often do you honestly see yourself using it this month?"
             done = False
+            recommendation = None
 
     db.add_turn(payload.session_id, user_text=payload.user_text, reply_text=reply_text)
 
+    audio_param = urllib.parse.quote(reply_text)
+    reply_audio_url = f"/checkout/voice/speak?text={audio_param}"
+
     return CheckoutTurnResponse(
         reply_text=reply_text,
-        reply_audio_url=None,
+        reply_audio_url=reply_audio_url,
         done=done,
+        recommendation=recommendation,
     )
 
 
