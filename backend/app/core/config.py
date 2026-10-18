@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = ""
     elevenlabs_agent_id: str = ""
     gemini_api_key: str = ""
+    # Google retires older models for new keys; override in .env if this one goes away.
+    gemini_model: str = "gemini-3.8-flash"
 
     @property
     def cors_origin_list(self) -> list[str]:

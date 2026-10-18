@@ -51,7 +51,9 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
       return data;
     } catch (err) {
       console.error("❌ Failed to send verdict to backend:", err);
+      callbacks.onVerdictError?.(err);
       callbacks.onError?.(err);
+      return null;
     }
   }
 

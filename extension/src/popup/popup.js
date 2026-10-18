@@ -430,6 +430,7 @@ async function startConversation() {
     state.micOn = true;
     state.recommendation = null;
     state.suggestion = null;
+    state.verdictError = null;
     state.endedAt = 0;
     state.userTranscript = "";
     state.subtitle = "Connecting with Pip…";
@@ -486,6 +487,10 @@ async function startConversation() {
               state.subtitle = verdict.closing_line;
             }
             render();
+          },
+          onVerdictError: (err) => {
+            // e.g. API 503: GEMINI_API_KEY not configured — shown if the decision can't be saved
+            state.verdictError = String(err?.message ?? err).replace(/^API \d+: /, "");
           },
           onEnd: ({ byAgent }) => {
             if (byAgent && state.screen === "conversation") showVerdict();
@@ -572,9 +577,11 @@ async function endConversation(decision = "buy") {
       await submitCheckoutDecision(state.checkoutSessionId, decision);
     } catch (e) {
       console.warn("Could not submit decision:", e);
-      saveError = /409|not ready/i.test(String(e?.message))
-        ? "Pip didn't finish a verdict, so this decision wasn't saved."
-        : `Your decision wasn't saved: ${e?.message ?? e}`;
+      saveError = !/409|not ready/i.test(String(e?.message))
+        ? `Your decision wasn't saved: ${e?.message ?? e}`
+        : state.verdictError
+          ? `Pip's verdict failed, so this decision wasn't saved: ${state.verdictError}`
+          : "Pip didn't finish a verdict, so this decision wasn't saved.";
     }
   } else {
     saveError = "This conversation wasn't linked to a checkout session, so the decision wasn't saved.";

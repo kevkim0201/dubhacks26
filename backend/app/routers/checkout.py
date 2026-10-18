@@ -8,6 +8,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 
@@ -301,17 +302,21 @@ async def generate_and_save_verdict(
     Produce the structured JSON verdict evaluating the purchase.
     """
 
-    response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=SquirrelVerdictJSON,
-            temperature=0.1,
-        ),
-    )
-
-    verdict = SquirrelVerdictJSON.model_validate_json(response.text)
+    try:
+        response = gemini_client.models.generate_content(
+            model=settings.gemini_model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=SquirrelVerdictJSON,
+                temperature=0.1,
+            ),
+        )
+        verdict = SquirrelVerdictJSON.model_validate_json(response.text)
+    except genai_errors.APIError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Gemini ({settings.gemini_model}) failed: {exc.message or exc}") from exc
+    except ValueError as exc:  # malformed / schema-mismatched JSON
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Gemini returned an invalid verdict: {exc}") from exc
 
     if payload.session_id:
         if user is None or user.id == "demo-user":
