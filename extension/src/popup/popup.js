@@ -128,11 +128,11 @@ const screens = {
     <main class="screen">
       <h1 class="title">No checkout yet.</h1>
       <p class="muted sub">Pip will pop up when you reach a checkout page.</p>
-      <div class="empty-cart">${icons.bag(18)}<span>Shopping for something? Talk it through before you head to checkout.</span></div>
+      <div class="empty-cart">${icons.bag(18)}<span>Shopping for something? Reach a checkout page or add items to your cart to talk with Pip.</span></div>
       <div class="art art-sm">${squirrel({ scarf: hasScarf() })}</div>
       ${progressCard(state.progress)}
-      <button class="btn btn-primary" data-action="start">${icons.mic(16)}<span>Talk to Pip</span></button>
-      <p class="fine">${icons.headphones(12)} Tell Pip what you're thinking of buying.</p>
+      <button class="btn btn-primary" data-action="start" disabled>${icons.mic(16)}<span>Talk to Pip</span></button>
+      <p class="fine">${icons.headphones(12)} Disabled until a checkout is detected.</p>
     </main>
     ${navBar("talk")}`,
 

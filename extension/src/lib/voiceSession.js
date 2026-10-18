@@ -43,6 +43,9 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
     }
   }
 
+  console.log(`[ElevenLabs API] Connecting WebSocket to agent: ${ELEVENLABS_AGENT_ID}`);
+  console.log(`[ElevenLabs API] Dynamic variables:`, { cart_items: cartItems, cart_total: cartTotal });
+
   // 2. Start live WebSocket session with your ElevenLabs Agent
   const conversation = await Conversation.startSession({
     agentId: ELEVENLABS_AGENT_ID,
@@ -52,7 +55,7 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
     },
 
     onConnect: () => {
-      console.log("🐿️ Connected to Pip (`agent_4801m56k1bnffh1sfrwk9a90dvry`)");
+      console.log(`[ElevenLabs Response] ✅ Connected WebSocket to agent: ${ELEVENLABS_AGENT_ID}`);
     },
 
     onMessage: (msg) => {
@@ -60,23 +63,23 @@ export async function startSquirrelVoiceSession(cart = {}, callbacks = {}) {
       const role = msg.source === "ai" ? "squirrel" : "user";
       const entry = { role, text: msg.message };
       transcript.push(entry);
-      console.log(`[${role.toUpperCase()}]: ${msg.message}`);
+      console.log(`[ElevenLabs Response] 💬 ${role.toUpperCase()}:`, msg.message);
       callbacks.onTranscript?.(entry, transcript);
     },
 
     onModeChange: ({ mode }) => {
-      // "speaking" or "listening"
+      console.log(`[ElevenLabs Response] 🔄 Mode changed: ${mode}`);
       callbacks.onModeChange?.(mode);
     },
 
     // Fires automatically when Pip ends the call on Turn 3 (or if manually stopped)
     onDisconnect: async () => {
-      console.log("📞 Call ended. Sending transcript to FastAPI for structured JSON verdict...");
+      console.log("[ElevenLabs Response] 📞 Call disconnected.");
       await sendVerdictToBackend();
     },
 
     onError: (err) => {
-      console.error("ElevenLabs Agent Error:", err);
+      console.error("[ElevenLabs Error] ❌", err);
       callbacks.onError?.(err);
     },
   });
