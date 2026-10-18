@@ -92,5 +92,5 @@ export function navBar(active) {
     <button class="nav-tab ${active === id ? "active" : ""}" data-action="go-${id}">
       ${icon(16)}<span>${label}</span>
     </button>`;
-  return `<nav class="bottom-nav">${tab("talk", "Talk", icons.wave)}${tab("companion", "Companion", icons.sprout)}${tab("impact", "Impact", icons.chart)}</nav>`;
+  return `<nav class="bottom-nav">${tab("talk", "Talk", icons.wave)}${tab("companion", "Companion", icons.sprout)}${tab("impact", "Impact", icons.chart)}${tab("avatar", "Avatar", icons.sparkle)}</nav>`;
 }

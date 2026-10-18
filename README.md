@@ -47,6 +47,14 @@ Copy the extension ID and add its callback URL to Supabase (step 1.3).
 > Keep the unpacked extension in the same folder to keep its ID stable on your machine.
 > Teammates may have different IDs and must allow their own callback URL in Supabase.
 
+### Avatar closet
+
+Open the Nook popup and choose **Avatar**, or choose **Avatar** from the impact dashboard.
+Apply `supabase/migrations/20261018_avatar_cosmetics.sql` in the Supabase SQL Editor
+after the recommendation rewards migration. The closet then loads the signed-in account's
+acorn balance and cosmetics; purchases and equipment are saved to the account and used to
+render Pip in the popup, dashboard, and checkout overlay.
+
 ### Trying the checkout flow
 
 ```bash

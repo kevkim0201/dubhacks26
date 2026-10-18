@@ -1,8 +1,9 @@
 import { apiFetch } from "../lib/api.js";
 import { checkAuth, signInWithGoogle } from "../lib/auth.js";
 import { setPopupIntent } from "../lib/checkout.js";
+import { loadCosmeticsState } from "../lib/cosmetics-api.js";
 import { levelInfo, loadProgress, xpToNext } from "../lib/progress.js";
-import { icons, squirrel } from "../ui/art.js";
+import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, escape } from "../ui/components.js";
 import { decisionsChart, savingsChart } from "./charts.js";
 import { sampleImpact } from "./sample.js";
@@ -12,6 +13,7 @@ const app = document.getElementById("app");
 const state = {
   session: null,
   progress: null,
+  cosmetics: null,
   data: null,
   notice: null, // why we're showing sample data, if we are
   weeks: 4,
@@ -96,6 +98,7 @@ function topbar() {
       </div>
       <nav class="top-tabs" aria-label="Nook">
         ${tab("noop", "Your impact", icons.chart, true)}
+        ${tab("open-avatar", "Avatar", icons.sparkle)}
         ${tab("open-companion", "Companion", icons.sprout)}
         ${tab("open-talk", "Talk", icons.wave)}
       </nav>
@@ -358,6 +361,7 @@ async function openPopup(screen) {
 }
 
 const actions = {
+  "open-avatar": () => chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") }),
   async google() {
     try {
       state.session = await signInWithGoogle();
@@ -394,9 +398,24 @@ app.addEventListener("change", (e) => {
 });
 
 async function start() {
-  state.progress = await loadProgress(state.session.user.id);
+  [state.progress, state.cosmetics] = await Promise.all([
+    loadProgress(state.session.user.id),
+    loadCosmeticsState(),
+  ]);
+  state.progress.acorns = Number(state.cosmetics.profile.acorn_balance);
+  setSquirrelCosmetics(state.cosmetics);
   await load();
 }
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  const key = state.session?.user?.id ? `cosmetics:${state.session.user.id}` : "";
+  if (areaName === "local" && key && changes[key]?.newValue) {
+    state.cosmetics = changes[key].newValue;
+    if (state.progress) state.progress.acorns = Number(state.cosmetics.profile.acorn_balance);
+    setSquirrelCosmetics(state.cosmetics);
+    render();
+  }
+});
 
 checkAuth()
   .then(async (session) => {

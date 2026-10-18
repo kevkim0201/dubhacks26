@@ -175,6 +175,85 @@ def get_user_state(user_id: str) -> dict[str, Any]:
     return {"profile": profiles[0], "recent_decisions": decisions}
 
 
+def get_avatar_state(user_id: str) -> dict[str, Any]:
+    profiles = _request(
+        "GET",
+        "profiles",
+        params={
+            "id": f"eq.{user_id}",
+            "select": "id,total_xp,acorn_balance,tier",
+            "limit": "1",
+        },
+    )
+    if not isinstance(profiles, list) or not profiles:
+        raise SupabaseAPIError(404, "P0002", "User profile not found")
+
+    cosmetics = _request(
+        "GET",
+        "cosmetics",
+        params={
+            "is_active": "eq.true",
+            "select": "id,name,description,category,cost_acorns,minimum_tier,asset_key,is_tier_gift",
+            "order": "category.asc,cost_acorns.asc,name.asc",
+        },
+    )
+    if not isinstance(cosmetics, list):
+        raise SupabaseUnavailable("Supabase returned an invalid cosmetics catalog")
+    if not cosmetics:
+        raise SupabaseUnavailable(
+            "The cosmetics catalog is empty; apply the avatar cosmetics Supabase migration"
+        )
+
+    owned_rows = _request(
+        "GET",
+        "user_cosmetics",
+        params={
+            "user_id": f"eq.{user_id}",
+            "select": "cosmetic_id,is_equipped,slot",
+        },
+    )
+    if not isinstance(owned_rows, list):
+        raise SupabaseUnavailable("Supabase returned invalid owned cosmetics")
+
+    owned = {row["cosmetic_id"]: row for row in owned_rows}
+    equipped = {
+        row["slot"]: row["cosmetic_id"]
+        for row in owned_rows
+        if row.get("is_equipped") and row.get("slot")
+    }
+    catalog = [
+        {
+            **cosmetic,
+            "owned": cosmetic["id"] in owned,
+            "equipped": bool(owned.get(cosmetic["id"], {}).get("is_equipped")),
+        }
+        for cosmetic in cosmetics
+    ]
+    return {"profile": profiles[0], "cosmetics": catalog, "equipped": equipped}
+
+
+def purchase_cosmetic(user_id: str, cosmetic_id: str) -> dict[str, Any]:
+    result = _request(
+        "POST",
+        "rpc/purchase_cosmetic",
+        payload={"p_user_id": user_id, "p_cosmetic_id": cosmetic_id},
+    )
+    if not isinstance(result, dict):
+        raise SupabaseUnavailable("Supabase returned an invalid cosmetic purchase result")
+    return result
+
+
+def equip_cosmetic(user_id: str, cosmetic_id: str) -> dict[str, Any]:
+    result = _request(
+        "POST",
+        "rpc/equip_cosmetic",
+        payload={"p_user_id": user_id, "p_cosmetic_id": cosmetic_id},
+    )
+    if not isinstance(result, dict):
+        raise SupabaseUnavailable("Supabase returned an invalid cosmetic equip result")
+    return result
+
+
 def list_decisions_since(user_id: str, since_iso: str) -> list[dict[str, Any]]:
     rows = _request(
         "GET",

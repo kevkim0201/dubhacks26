@@ -1,8 +1,9 @@
 import { checkAuth, signInWithGoogle, signOut } from "../lib/auth.js";
 import { startCheckoutSession } from "../lib/checkout-api.js";
 import { getActiveTabCheckout, takePopupIntent } from "../lib/checkout.js";
+import { loadCosmeticsState } from "../lib/cosmetics-api.js";
 import { loadProgress } from "../lib/progress.js";
-import { icons, squirrel } from "../ui/art.js";
+import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
 import { acornChip, cartCard, escape, logo, navBar, progressCard } from "../ui/components.js";
 
 const app = document.getElementById("app");
@@ -12,6 +13,7 @@ const state = {
   session: null,
   checkoutSessionId: null,
   progress: null,
+  cosmetics: null,
   checkout: null, // cart the content script spotted in the active tab
   error: null,
   busy: false,
@@ -192,10 +194,12 @@ function go(screen) {
 
 async function enterApp(session, intent) {
   state.session = session;
-  [state.progress, state.checkout] = await Promise.all([
+  [state.progress, state.checkout, state.cosmetics] = await Promise.all([
     loadProgress(session.user.id),
     getActiveTabCheckout().catch(() => null),
+    loadCosmeticsState(),
   ]);
+  setSquirrelCosmetics(state.cosmetics);
   if (intent === "conversation") await startConversation();
   else go(intent === "companion" ? "companion" : "talk");
 }
@@ -260,10 +264,13 @@ const actions = {
   "go-talk": () => go("talk"),
   "go-companion": () => go("companion"),
   "go-impact": () => chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/index.html") }),
+  "go-avatar": () => chrome.tabs.create({ url: chrome.runtime.getURL("avatar/index.html") }),
   async "sign-out"() {
     await signOut();
     state.session = null;
     state.progress = null;
+    state.cosmetics = null;
+    setSquirrelCosmetics(null);
     go("welcome");
   },
 };
@@ -276,6 +283,19 @@ app.addEventListener("click", (e) => {
     state.error = err?.message ?? String(err);
     render();
   });
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  const key = state.session?.user?.id ? `cosmetics:${state.session.user.id}` : "";
+  if (areaName === "local" && key && changes[key]?.newValue) {
+    state.cosmetics = changes[key].newValue;
+    setSquirrelCosmetics(state.cosmetics);
+    state.progress = {
+      ...state.progress,
+      acorns: Number(state.cosmetics.profile.acorn_balance),
+    };
+    render();
+  }
 });
 
 // ---------- startup: check auth status first ----------

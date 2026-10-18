@@ -1,4 +1,7 @@
 // Inline SVG art: Pip the squirrel and the small UI icons.
+import { renderScene, SCENE_CSS } from "../../assets/squirrel-assets.js";
+
+let accountCosmetics = null;
 
 const C = {
   blob: "#e4e9d8",
@@ -21,7 +24,28 @@ function sparkle(x, y, s) {
     d="M0 -10 C1 -3 3 -1 10 0 C3 1 1 3 0 10 C-1 3 -3 1 -10 0 C-3 -1 -1 -3 0 -10Z"/>`;
 }
 
+export function setSquirrelCosmetics(cosmetics) {
+  accountCosmetics = cosmetics;
+}
+
 export function squirrel({ scarf = false, sparkles = false } = {}) {
+  if (accountCosmetics?.cosmetics && accountCosmetics?.equipped) {
+    const asset = (slot) => {
+      const id = accountCosmetics.equipped[slot];
+      return accountCosmetics.cosmetics.find((item) => item.id === id)?.asset_key ?? "none";
+    };
+    const tier = accountCosmetics.profile?.tier;
+    const level = { Baby: 1, Scout: 2, Forager: 3, Hoarder: 4, Golden: 5 }[tier] ?? 1;
+    return renderScene({
+      level,
+      background: asset("background") === "none" ? "meadow" : asset("background"),
+      head: asset("head"),
+      neck: asset("neck"),
+      held: asset("held"),
+      effect: asset("effect"),
+      label: `${tier ?? "Baby"} squirrel`,
+    }).replace("</svg>", `<style>${SCENE_CSS}</style></svg>`);
+  }
   return `
 <svg class="pip" viewBox="0 0 220 180" role="img" aria-label="Pip the squirrel">
   <ellipse cx="118" cy="92" rx="88" ry="78" fill="${C.blob}"/>
