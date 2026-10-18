@@ -122,3 +122,68 @@ export function pageMenu(open, { signOut = true } = {}) {
       }
     </div>`;
 }
+
+export function pipsSwapsCard(recommendations, { isLoading = false } = {}) {
+  if (isLoading) {
+    return `
+      <div class="swaps-container loading">
+        <div class="swaps-header">
+          <div class="swaps-title">
+            <span class="swaps-sparkle">✨</span>
+            <strong>Pip's Swaps</strong>
+          </div>
+          <span class="swaps-pill-loading">Searching deals...</span>
+        </div>
+        <div class="swap-shimmer-card">
+          <div class="swap-shimmer-bar short"></div>
+          <div class="swap-shimmer-bar long"></div>
+        </div>
+      </div>`;
+  }
+
+  const items = Array.isArray(recommendations) ? recommendations : [];
+  if (items.length === 0) return "";
+
+  const maxSavings = Math.max(...items.map((r) => Number(r.estimated_savings) || 0));
+  const savingsBadge = maxSavings > 0
+    ? `<span class="swaps-pill-save">Save up to $${maxSavings.toFixed(2)}</span>`
+    : "";
+
+  return `
+    <div class="swaps-container">
+      <div class="swaps-header">
+        <div class="swaps-title">
+          <span class="swaps-sparkle">✨</span>
+          <strong>Pip's Swaps</strong>
+        </div>
+        ${savingsBadge}
+      </div>
+      <div class="swaps-list">
+        ${items
+          .slice(0, 3)
+          .map((rec) => {
+            const price = Number(rec.estimated_price || 0).toFixed(2);
+            const savings = Number(rec.estimated_savings || 0);
+            return `
+              <div class="swap-item" data-swap-id="${escape(rec.id)}">
+                <div class="swap-item-header">
+                  <span class="swap-product-name" title="${escape(rec.title)}">${escape(rec.title)}</span>
+                  <div class="swap-tags">
+                    <span class="swap-price">$${price}</span>
+                    ${savings > 0 ? `<span class="swap-savings">Save $${savings.toFixed(2)}</span>` : ""}
+                  </div>
+                </div>
+                ${rec.pip_reason ? `<p class="swap-advice">🐿️ “${escape(rec.pip_reason)}”</p>` : ""}
+                <div class="swap-actions">
+                  <button class="swap-btn" data-action="view-swap" data-swap-id="${escape(rec.id)}" data-url="${escape(rec.search_url)}" data-title="${escape(rec.title)}">
+                    <span>Check Deal</span>
+                    <span class="swap-btn-icon">↗</span>
+                  </button>
+                  <span class="swap-reward-hint">+10 🌰 on check</span>
+                </div>
+              </div>`;
+          })
+          .join("")}
+      </div>
+    </div>`;
+}

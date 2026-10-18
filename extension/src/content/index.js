@@ -3,8 +3,10 @@
 import themeCss from "../ui/theme.css?inline";
 import overlayCss from "./overlay.css?inline";
 import { icons, setSquirrelCosmetics, squirrel } from "../ui/art.js";
-import { acornChip, cartCard, logo, navBar, progressCard } from "../ui/components.js";
+import { acornChip, cartCard, logo, navBar, pipsSwapsCard, progressCard } from "../ui/components.js";
 import { readCheckout, scoreCheckout } from "./detect.js";
+import { fetchRecommendations } from "../lib/checkout-api.js";
+import { applySwapBonus } from "../lib/progress.js";
 
 // "Not now" only hides Pip for the current page view; reloading or the next
 // checkout page shows the overlay again.
@@ -14,7 +16,10 @@ let lastSent = null;
 let dismissedUrl = null; // set by "Not now" so DOM changes on this page don't re-open it
 let activeCheckout = null;
 let activeUserId = null;
+let currentStatus = null;
+let toastTimeout = null;
 let debug = false;
+const recsCache = new Map();
 
 function send(message) {
   try {
@@ -39,6 +44,22 @@ function ensureFont() {
   document.head.appendChild(style);
 }
 
+function showToast(message) {
+  if (!host?.shadowRoot) return;
+  const existing = host.shadowRoot.querySelector(".panel-toast");
+  if (existing) existing.remove();
+  clearTimeout(toastTimeout);
+
+  const toast = document.createElement("div");
+  toast.className = "panel-toast";
+  toast.textContent = message;
+  host.shadowRoot.querySelector(".panel")?.appendChild(toast);
+
+  toastTimeout = setTimeout(() => {
+    toast.remove();
+  }, 3200);
+}
+
 function panelHtml(checkout, status) {
   const progress = status?.progress;
   return `
@@ -55,6 +76,7 @@ function panelHtml(checkout, status) {
         <h1 class="title">Pip noticed a checkout.</h1>
         <p class="muted">Make your case before you buy.</p>
         ${cartCard(checkout, { variant: "overlay" })}
+        ${pipsSwapsCard(checkout.recommendations, { isLoading: checkout.loadingRecommendations })}
         <div class="art art-xs">${squirrel({ scarf: progress?.unlocked?.includes("scarf") })}</div>
         <p class="ask">“Why do you need this today?”</p>
         <p class="ask-sub muted">Tell your squirrel. Pip will challenge your reasons and may suggest buying or waiting.</p>
@@ -85,10 +107,12 @@ function dismissOverlay() {
 }
 
 function hideOverlay() {
+  clearTimeout(toastTimeout);
   host?.remove();
   host = null;
   activeCheckout = null;
   activeUserId = null;
+  currentStatus = null;
 }
 
 document.addEventListener("keydown", (e) => {
@@ -104,14 +128,67 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 async function showOverlay(checkout) {
   activeCheckout = checkout;
   const status = await send({ type: "GET_STATUS" });
+  currentStatus = status;
   activeUserId = status?.userId ?? null;
   setSquirrelCosmetics(status?.cosmetics ?? null);
   ensureFont();
 
+  const cartCacheKey = `${checkout.store}:${checkout.total}:${(checkout.items || []).map((i) => i.name).join("|")}`;
+  if (recsCache.has(cartCacheKey)) {
+    checkout.recommendations = recsCache.get(cartCacheKey);
+    checkout.loadingRecommendations = false;
+  } else if (!checkout.recommendations && !checkout.loadingRecommendations) {
+    checkout.loadingRecommendations = true;
+    fetchRecommendations(checkout)
+      .then((res) => {
+        const list = res?.recommendations || [];
+        recsCache.set(cartCacheKey, list);
+        if (activeCheckout === checkout) {
+          activeCheckout.recommendations = list;
+          activeCheckout.loadingRecommendations = false;
+          render();
+        }
+      })
+      .catch((err) => {
+        console.warn("[Nook] Failed to fetch recommendations:", err);
+        if (activeCheckout === checkout) {
+          activeCheckout.recommendations = [];
+          activeCheckout.loadingRecommendations = false;
+          render();
+        }
+      });
+  }
+
+  function render() {
+    if (!host) return;
+    host.shadowRoot.innerHTML = `<style>${themeCss}${overlayCss}</style>${panelHtml(activeCheckout, currentStatus)}`;
+  }
+
   if (!host) {
     host = document.createElement("nook-overlay");
     const root = host.attachShadow({ mode: "open" });
-    root.addEventListener("click", (e) => {
+    root.addEventListener("click", async (e) => {
+      const swapBtn = e.target.closest('[data-action="view-swap"]');
+      if (swapBtn) {
+        const url = swapBtn.dataset.url;
+        const swapId = swapBtn.dataset.swapId;
+        const title = swapBtn.dataset.title;
+        if (url) {
+          window.open(url, "_blank");
+        }
+        try {
+          const updatedProgress = await applySwapBonus(activeUserId, swapId, { searchUrl: url, title });
+          showToast("+10 acorns for exploring a smart swap! 🌰");
+          if (updatedProgress && currentStatus) {
+            currentStatus.progress = updatedProgress;
+            render();
+          }
+        } catch (err) {
+          console.warn("Could not apply swap bonus:", err);
+        }
+        return;
+      }
+
       const action = e.target.closest("[data-action]")?.dataset.action;
       if (action === "close") {
         dismissOverlay();
@@ -127,7 +204,8 @@ async function showOverlay(checkout) {
     });
     document.documentElement.appendChild(host);
   }
-  host.shadowRoot.innerHTML = `<style>${themeCss}${overlayCss}</style>${panelHtml(checkout, status)}`;
+
+  render();
 }
 
 async function scan() {

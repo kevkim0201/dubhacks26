@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase.js";
 import { getCosmeticsState } from "../lib/cosmetics-api.js";
 import { progressFromProfile } from "../lib/progress.js";
 import { clearCheckout, saveCheckout, setPopupIntent } from "../lib/checkout.js";
+import { trackSwapClick } from "../lib/checkout-api.js";
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("Nook installed");
@@ -60,6 +61,35 @@ const handlers = {
       console.warn("openPopup failed", err);
       return { ok: false };
     }
+  },
+
+  async RECORD_SWAP_CLICK(message) {
+    const { userId, swapId, details } = message;
+    if (swapId) {
+      try {
+        await trackSwapClick(swapId, details?.searchUrl, details?.title);
+      } catch (e) {
+        console.warn("Could not log swap click to backend:", e);
+      }
+    }
+    if (userId) {
+      const key = `cosmetics:${userId}`;
+      const stored = await chrome.storage.local.get(key);
+      const state = stored[key];
+      if (state?.profile) {
+        const updated = {
+          ...state,
+          profile: {
+            ...state.profile,
+            acorn_balance: Number(state.profile.acorn_balance ?? 0) + 10,
+            total_xp: Number(state.profile.total_xp ?? 0) + 10,
+          },
+        };
+        await chrome.storage.local.set({ [key]: updated });
+        return { ok: true, progress: progressFromProfile(updated.profile) };
+      }
+    }
+    return { ok: true };
   },
 };
 

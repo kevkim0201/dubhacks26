@@ -43,3 +43,44 @@ export function xpToNext(level) {
   const next = LEVELS.find((l) => l.level === level + 1);
   return next ? next.min - levelInfo(level).min : 1;
 }
+
+/**
+ * Awards +10 acorns and +10 XP for exploring a Pip's Swap alternative.
+ * Updates local cache and notifies the background service worker.
+ */
+export async function applySwapBonus(userId, swapId, details = {}) {
+  // If chrome messaging is available, delegate to background service worker
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      const res = await chrome.runtime.sendMessage({
+        type: "RECORD_SWAP_CLICK",
+        userId,
+        swapId,
+        details,
+      });
+      if (res?.progress) return res.progress;
+    }
+  } catch (err) {
+    console.warn("Could not dispatch RECORD_SWAP_CLICK to background:", err);
+  }
+
+  // Fallback to direct local storage update
+  if (userId && typeof chrome !== "undefined" && chrome.storage?.local) {
+    const key = `cosmetics:${userId}`;
+    const stored = await chrome.storage.local.get(key);
+    const state = stored[key];
+    if (state?.profile) {
+      const updated = {
+        ...state,
+        profile: {
+          ...state.profile,
+          acorn_balance: Number(state.profile.acorn_balance ?? 0) + 10,
+          total_xp: Number(state.profile.total_xp ?? 0) + 10,
+        },
+      };
+      await chrome.storage.local.set({ [key]: updated });
+      return progressFromProfile(updated.profile);
+    }
+  }
+  return null;
+}

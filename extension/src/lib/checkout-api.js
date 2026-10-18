@@ -52,3 +52,37 @@ export async function submitCheckoutDecision(sessionId, decision, checkout = nul
     body: JSON.stringify({ decision, ...(checkout ? cartPayload(checkout) : {}) }),
   });
 }
+
+export async function fetchRecommendations(checkout) {
+  const payload = cartPayload(checkout);
+  const rawTotal = parseFloat(payload.cart_total) || 0;
+  return apiFetch("/api/checkout/recommendations", {
+    method: "POST",
+    body: JSON.stringify({
+      items: payload.items.map((item) => ({
+        name: item.name,
+        price: parseFloat(item.price) || 0,
+        quantity: item.quantity,
+      })),
+      total_cost: rawTotal,
+      store_domain: payload.store,
+    }),
+  });
+}
+
+export async function trackSwapClick(recommendationId, searchUrl, title = null) {
+  try {
+    return await apiFetch("/api/checkout/recommendations/click", {
+      method: "POST",
+      body: JSON.stringify({
+        recommendation_id: recommendationId,
+        search_url: searchUrl,
+        title,
+      }),
+    });
+  } catch (err) {
+    console.warn("trackSwapClick failed:", err);
+    return null;
+  }
+}
+

@@ -104,3 +104,239 @@
 .panel .bottom-nav {
   padding: 8px 12px 10px;
 }
+
+/* ---------- Pip's Swaps UI ---------- */
+
+.swaps-container {
+  margin: 10px 0 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgb(40 58 47 / 0.04);
+}
+
+.swaps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.swaps-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--green);
+}
+
+.swaps-sparkle {
+  font-size: 13px;
+}
+
+.swaps-pill-save {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #d8f3dc;
+  color: #1b4332;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.swaps-pill-loading {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--track);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  animation: pulse-subtle 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.swaps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.swap-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.swap-item:hover {
+  border-color: #c9dfc7;
+  box-shadow: 0 3px 8px rgb(40 58 47 / 0.06);
+}
+
+.swap-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.swap-product-name {
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text);
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.swap-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.swap-price {
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.swap-savings {
+  font-size: 10px;
+  font-weight: 800;
+  color: #1b4332;
+  background: #d8f3dc;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.swap-advice {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+  margin: 0;
+  font-style: italic;
+}
+
+.swap-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.swap-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--green-card);
+  color: var(--green);
+  font-weight: 700;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.swap-btn:hover {
+  background: var(--green);
+  color: #ffffff;
+  border-color: var(--green);
+  transform: translateY(-1px);
+}
+
+.swap-btn-icon {
+  font-size: 11px;
+}
+
+.swap-reward-hint {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold-text);
+}
+
+/* Shimmer Loading */
+.swap-shimmer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.swap-shimmer-bar {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ede7d8 25%, #f6f2e8 50%, #ede7d8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.swap-shimmer-bar.short {
+  width: 50%;
+}
+
+.swap-shimmer-bar.long {
+  width: 85%;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Toast */
+.panel-toast {
+  position: absolute;
+  bottom: 54px;
+  left: 14px;
+  right: 14px;
+  background: #2f4f3e;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 4px 14px rgb(40 58 47 / 0.28);
+  animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 100;
+  pointer-events: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

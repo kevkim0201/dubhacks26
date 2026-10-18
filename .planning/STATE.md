@@ -2,9 +2,9 @@
 
 ## Current Status
 - **Current Milestone:** Milestone 1 (Hackathon MVP)
-- **Active Phase:** Phase 2 (Checkout Interception & Pip's Swaps Recommendations)
-- **Status:** Phase 2 Planned (Plans 02-01, 02-02, 02-03 ready for execution)
-- **Next Command:** `/gsd-execute-phase 2`
+- **Active Phase:** Phase 2 (Checkout Interception & Pip's Swaps Recommendations) — COMPLETED
+- **Status:** Phase 2 executed and verified (Backend Jev engine, Frontend API helper, Shadow DOM "Pip's Swaps" UI, click tracking & acorn rewards)
+- **Next Command:** `/gsd-plan-phase 3` (or `/gsd-next`)
 
 ## Decision Log
 - **2026-10-17:** Adopted FastAPI backend (`backend/`) and Vite Chrome MV3 extension (`extension/`).
