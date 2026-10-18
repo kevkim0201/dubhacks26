@@ -5,6 +5,11 @@ import { CONFIG_ERROR } from "./config.js";
 // The redirect URL (https://<extension-id>.chromiumapp.org/) must be added to
 // Supabase -> Authentication -> URL Configuration -> Redirect URLs.
 export async function signInWithGoogle() {
+  if (CONFIG_ERROR) throw new Error(CONFIG_ERROR);
+  if (!chrome?.identity?.launchWebAuthFlow || !chrome.identity.getRedirectURL) {
+    throw new Error("Google sign-in requires the extension Identity permission. Reload the extension and try again.");
+  }
+
   const redirectTo = chrome.identity.getRedirectURL();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -12,22 +17,50 @@ export async function signInWithGoogle() {
     options: { redirectTo, skipBrowserRedirect: true },
   });
   if (error) throw error;
+  if (!data.url) throw new Error("Supabase did not return a Google sign-in URL.");
 
-  const responseUrl = await chrome.identity.launchWebAuthFlow({
-    url: data.url,
-    interactive: true,
-  });
+  let responseUrl;
+  try {
+    responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: data.url,
+      interactive: true,
+    });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    if (/cancel|closed/i.test(message)) throw new Error("Google sign-in was cancelled.");
+    throw new Error(
+      `Google sign-in could not finish. Check the Google OAuth callback URL and the Supabase redirect allow list. (${message})`
+    );
+  }
 
   const url = new URL(responseUrl);
+  const expectedRedirect = new URL(redirectTo);
+  if (url.origin !== expectedRedirect.origin || url.pathname !== expectedRedirect.pathname) {
+    throw new Error("Google sign-in returned an unexpected extension callback URL.");
+  }
+  const oauthError = url.searchParams.get("error") ?? url.hash.match(/(?:^|&)error=([^&]+)/)?.[1];
+  if (oauthError) {
+    const description =
+      url.searchParams.get("error_description") ??
+      url.hash.match(/(?:^|&)error_description=([^&]+)/)?.[1];
+    throw new Error(
+      description
+        ? decodeURIComponent(description.replace(/\+/g, " "))
+        : `Google sign-in failed: ${decodeURIComponent(oauthError)}`
+    );
+  }
+
   const code = url.searchParams.get("code");
   if (!code) {
-    const message = url.searchParams.get("error_description") ?? "No auth code returned";
-    throw new Error(message);
+    throw new Error(
+      "Google sign-in returned no authorization code. Check that the exact extension redirect URL is allowed in Supabase."
+    );
   }
 
   const { data: sessionData, error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) throw exchangeError;
+  if (!sessionData.session) throw new Error("Google sign-in finished without creating a session.");
   return sessionData.session;
 }
 
